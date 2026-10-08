@@ -73,6 +73,8 @@ Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm 
 
 ## 3. Phần cứng
 
+> Sơ đồ nguyên lý chi tiết, netlist, quy trình hiệu chuẩn: [HARDWARE.md](HARDWARE.md)
+
 ### 3.1 Danh sách linh kiện (BOM)
 
 | # | Linh kiện | SL | Ghi chú |
@@ -123,7 +125,7 @@ Một ESP32 DevKit V1 cắm USB vào laptop, lấy nguồn từ USB, không gắ
 
 ### 4.1 Công cụ và cấu trúc
 
-- **PlatformIO + Arduino-ESP32** (core 3.x). Các task tách riêng bằng API FreeRTOS (`xTaskCreatePinnedToCore`, queue, timer).
+- **PlatformIO + Arduino-ESP32** (core 2.0.x qua `espressif32 @ ^6.9.0`). Các task tách riêng bằng API FreeRTOS (`xTaskCreatePinnedToCore`, queue, timer).
 - Thư viện: `Adafruit SHT31` (tương thích SHT30), `ArduinoJson` (gateway).
 - `platformio.ini` có các env: `node_z1`, `node_z2`, `node_z3`, `gateway`. Mỗi env node khác nhau ở build flag `-DZONE_ID=n`.
 - `firmware/lib/protocol/protocol.h` chứa struct gói tin dùng chung cho cả node lẫn gateway.
@@ -189,13 +191,15 @@ Lệnh bị từ chối (đang cooldown / đang chạy) → ACK status = REJECTE
 | `serialRxTask` | Đọc từng dòng từ Serial, parse JSON, rồi xếp lệnh vào `cmdQueue[zone]`. |
 | `cmdTask` | Gửi lệnh, chờ ACK (300 ms), retry ≤ 3 lần; báo kết quả `ok` / `rejected` / `timeout` lên server. |
 | `livenessTask` (1 s) | Nếu `now - last_seen[zone] > 90 s` thì phát `{"t":"node","zone":z,"online":false}` (chỉ phát khi trạng thái đổi). |
-| `beaconTimer` (60 s) | Gửi `BEACON` (kèm epoch nếu server đã đồng bộ giờ) tới cả 3 nút. |
+| `beaconTimer` (60 s) | Gửi `BEACON` (kèm epoch nếu server đã đồng bộ giờ) tới cả 3 nút, **chỉ khi server còn sống** (nhận dòng JSON từ server trong 3 phút gần nhất). Laptop tắt nhưng gateway vẫn có nguồn thì nút vẫn chuyển được sang FALLBACK. LED GPIO2 sáng khi server còn sống. |
 
 Gateway **không đệm dữ liệu** khi laptop mất kết nối: dữ liệu trong khoảng đó bị bỏ qua.
 
 ---
 
 ## 5. Giao thức ESP-NOW (Node ⇄ Gateway)
+
+> Bảng offset từng byte, ví dụ hex, sơ đồ tuần tự ACK: [PROTOCOL.md](PROTOCOL.md)
 
 - Unicast theo MAC trong bảng ghi cứng, kênh 1, không mã hóa (có thể bật PMK/LMK sau).
 - Lớp MAC của ESP-NOW đã có ACK. Ngoài ra còn **ACK tầng ứng dụng** cho lệnh, để xác nhận nút đã *chấp nhận và thi hành*.
@@ -229,7 +233,7 @@ typedef struct {
   uint8_t  node_mode;  // 0=NORMAL, 1=FALLBACK
   uint8_t  flags;      // bit0: lỗi SHT30, bit1: lỗi ADC, bit2: đang cooldown
   uint32_t uptime_s;
-} MsgTelemetry;        // 20 byte
+} MsgTelemetry;        // 19 byte
 
 typedef struct {
   MsgHeader h;
@@ -299,10 +303,13 @@ USB-Serial **115200 8N1**, mỗi bản tin là **1 dòng JSON** kết thúc bằ
 {"t":"cmd","zone":2,"seq":7,"dur":15}
 {"t":"stop","zone":2,"seq":8}
 {"t":"cfg","zone":1,"seq":9,"low":35.0,"max":30,"fb":10}
-{"t":"time","epoch":1794000000}
+{"t":"time","epoch":1794000000}     // gửi mỗi 60 s: đồng bộ giờ + heartbeat của server
+{"t":"ping"}                         // heartbeat không kèm giờ (tuỳ chọn)
 ```
 
-`seq` cho lệnh do **server cấp** (mỗi Zone một bộ đếm riêng) và gateway giữ nguyên khi gửi xuống nút, nhờ vậy server đối chiếu được ACK với bản ghi trong `commands`.
+`seq` cho lệnh do **server cấp** (mỗi Zone một bộ đếm riêng, lưu bền trong `commands` để không bắt đầu lại từ 1 khi server khởi động lại) và gateway giữ nguyên khi gửi xuống nút, nhờ vậy server đối chiếu được ACK với bản ghi trong `commands`. Gateway trả `status: "busy"` nếu hàng đợi lệnh đầy.
+
+Công cụ thử khi chưa có server: `python server/tools/gw_test.py COM5`.
 
 ---
 
