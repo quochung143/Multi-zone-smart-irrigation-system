@@ -8,18 +8,18 @@ Thiết kế chi tiết: [docs/DESIGN.md](docs/DESIGN.md)
 
 | Thư mục | Nội dung |
 |---|---|
-| `firmware/` | PlatformIO: env `node_z1..3`, `gateway`; `lib/protocol` dùng chung |
+| `firmware/` | ESP-IDF v5.5.5: project `node`, `gateway`; component `common` (protocol, cấu hình) |
 | `server/` | FastAPI backend, serial bridge, decision engine, dashboard (`static/`) |
 | `ml/` | Gán nhãn, đặc trưng, huấn luyện và đánh giá mô hình |
 | `docs/` | Tài liệu thiết kế, kế hoạch |
 
 ## Chạy nhanh
 
-```bash
-# Firmware
-cd firmware
-pio run -e node_z1 -t upload
-pio run -e gateway -t upload
+```powershell
+# Firmware (PowerShell)
+. firmware\idf_env.ps1
+cd firmware\node;    idf.py -p COM5 build flash monitor   # rồi gõ: zone 1
+cd ..\gateway;       idf.py -p COM6 build flash
 
 # Server
 cd server

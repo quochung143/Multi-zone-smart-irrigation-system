@@ -147,19 +147,19 @@ Relay **đóng** (IN = LOW) thì `COM`–`NO` thông, +5V cấp vào bơm. D1 m�
 
 ## 6. Quy trình hiệu chuẩn (console Serial 115200)
 
-1. Nạp firmware `pio run -e node_zN -t upload`, mở `pio device monitor`.
-2. Gõ `mac`, ghi MAC vào `firmware/include/config.h`.
+1. Trong PowerShell: `. firmware\idf_env.ps1`, `cd firmware\node`, `idf.py -p COMx flash monitor` (thoát monitor: `Ctrl+]`).
+2. Gõ `zone N` (1..3) để đặt Zone cho nút. Gõ `mac`, chép dòng `app_config.h: {...}` vào `firmware/components/common/include/app_config.h`.
 3. Gõ `stream on` để theo dõi `raw`.
 4. **Mốc khô**: lau sạch cảm biến, để ngoài không khí, chờ `raw` ổn định (~20 s), gõ `cal dry`.
 5. **Mốc ướt**: nhúng cảm biến vào cốc nước **đến vạch giới hạn** (không ngập phần mạch), chờ ổn định, gõ `cal wet`.
 6. `cal show` để kiểm tra. Kết quả lưu trong NVS, mất điện không mất.
 7. Cắm vào đất, ghi lại giá trị khi đất khô hẳn và ngay sau khi tưới đẫm để tham khảo khi đặt ngưỡng.
-8. Thử bơm: `water 5` → nghe relay đóng, bơm chạy 5 s và tự tắt. Sau đó `water 5` lần nữa sẽ bị `REJ_COOLDOWN` (dùng `cooldown clear` khi thử).
+8. Thử bơm: `water 5` → nghe relay đóng, bơm chạy 5 s và tự tắt. Sau đó `water 5` lần nữa sẽ bị `REJ_COOLDOWN` (dùng `cooldown_clear` khi thử).
 9. Đo lưu lượng bơm: `water 10` vào cốc đong, rồi tính ml/s (`pump_flow_ml_s`).
 
 ## 7. Kiểm thử ESP-NOW (tuần 11)
 
-Chuẩn bị: nạp firmware cho 3 nút và gateway, đọc MAC (`mac` trên console nút, dòng `hello` của gateway), điền vào `firmware/include/config.h`, rồi **nạp lại cả 4 board**.
+Chuẩn bị: nạp firmware cho 3 nút và gateway, đọc MAC (`mac` trên console nút, dòng `hello` của gateway), điền vào `firmware/components/common/include/app_config.h`, rồi **build và nạp lại cả 4 board**. Mỗi nút gõ `zone N` một lần (lưu NVS).
 
 Chạy server giả: `pip install pyserial`, sau đó `python server/tools/gw_test.py COM5` (COM của gateway).
 

@@ -125,14 +125,16 @@ Một ESP32 DevKit V1 cắm USB vào laptop, lấy nguồn từ USB, không gắ
 
 ### 4.1 Công cụ và cấu trúc
 
-- **PlatformIO + Arduino-ESP32** (core 2.0.x qua `espressif32 @ ^6.9.0`). Các task tách riêng bằng API FreeRTOS (`xTaskCreatePinnedToCore`, queue, timer).
-- Thư viện: `Adafruit SHT31` (tương thích SHT30), `ArduinoJson` (gateway).
-- `platformio.ini` có các env: `node_z1`, `node_z2`, `node_z3`, `gateway`. Mỗi env node khác nhau ở build flag `-DZONE_ID=n`.
-- `firmware/lib/protocol/protocol.h` chứa struct gói tin dùng chung cho cả node lẫn gateway.
-- `firmware/include/config.h` chứa bảng MAC, kênh Wi-Fi và các hằng số thời gian.
+- **ESP-IDF v5.5.5** (C), cài tại `D:\esp\esp-idf`, toolchain ở `D:\esp\.espressif`. Các task tách riêng bằng FreeRTOS (`xTaskCreatePinnedToCore`, queue, task notification). `CONFIG_FREERTOS_HZ=1000`.
+- Hai project IDF: `firmware/node` và `firmware/gateway`, dùng chung component `firmware/components/common`:
+  - `protocol.h`: struct gói tin ESP-NOW.
+  - `app_config.h`: bảng MAC, kênh Wi-Fi, chân GPIO, hằng số thời gian.
+- Driver: `esp_adc` (oneshot, ADC1), `i2c_master` (driver SHT30 tự viết, kiểm CRC-8), `esp_now`, `esp_console` (REPL trên nút), `cJSON` (gateway).
+- **Một firmware cho cả 3 nút**: Zone ID đặt bằng lệnh console `zone <1-3>` và lưu trong NVS. Chưa đặt zone thì nút không gửi/nhận ESP-NOW.
+- Mở môi trường build: `. firmware\idf_env.ps1` (PowerShell), rồi `idf.py build flash monitor` trong `firmware/node` hoặc `firmware/gateway`.
 
 ```c
-// config.h (ví dụ)
+// app_config.h (trích)
 #define ESPNOW_CHANNEL        1
 static const uint8_t GATEWAY_MAC[6]    = {0x24,0x6F,0x28,0x00,0x00,0x00};
 static const uint8_t NODE_MAC[3][6]    = { {...}, {...}, {...} }; // Zone 1..3
@@ -284,7 +286,7 @@ typedef struct {
 
 ## 6. Giao thức Serial (Gateway ⇄ Server)
 
-USB-Serial **115200 8N1**, mỗi bản tin là **1 dòng JSON** kết thúc bằng `\n`. Dòng không phải JSON (log debug) bắt đầu bằng `#` và server bỏ qua.
+USB-Serial **115200 8N1**, mỗi bản tin là **1 dòng JSON** kết thúc bằng `\n`. Server **chỉ xử lý dòng bắt đầu bằng `{`**, bỏ qua các dòng khác (log ESP-IDF mức WARN/ERROR, boot ROM, dòng chẩn đoán `# ...` của gateway).
 
 ### 6.1 Gateway → Server
 
@@ -492,11 +494,10 @@ Các con số 30 s và 10 s sẽ chỉnh lại sau khi đo lưu lượng bơm th
 ```
 doan2/
 ├── firmware/
-│   ├── platformio.ini          # env: node_z1, node_z2, node_z3, gateway
-│   ├── include/config.h        # MAC, kênh, hằng số thời gian
-│   ├── lib/protocol/protocol.h # struct gói tin dùng chung
-│   ├── src/node/               # main.cpp, sensor.cpp, pump.cpp, comm.cpp
-│   └── src/gateway/            # main.cpp, uplink.cpp, cmd.cpp
+│   ├── idf_env.ps1             # nạp môi trường ESP-IDF (D:\esp)
+│   ├── components/common/      # protocol.h, app_config.h (MAC, chân, hằng số)
+│   ├── node/                   # project IDF: main.c, sensor.c, sht30.c, pump.c, comm.c, console.c, settings.c
+│   └── gateway/                # project IDF: main.c, uplink.c, cmd.c
 ├── server/
 │   ├── app/
 │   │   ├── main.py             # FastAPI app, khởi động các task
@@ -546,7 +547,7 @@ doan2/
 | # | Quyết định |
 |---|---|
 | Q1 | Tài liệu kỹ thuật nội bộ, `docs/DESIGN.md` |
-| Q2 | ESP32 DevKit V1, Arduino-ESP32 + PlatformIO, task FreeRTOS |
+| Q2 | ESP32 DevKit V1, **ESP-IDF v5.5.5** (C), task FreeRTOS |
 | Q3 | Python + FastAPI + WebSocket, frontend HTML/JS + Chart.js |
 | Q4 | MongoDB (local Community, `motor`, `readings` là time-series) |
 | Q5 | Server chạy trên laptop, tắt chế độ ngủ khi thu dữ liệu |
@@ -556,7 +557,7 @@ doan2/
 | Q10 | Mất kết nối laptop: chấp nhận mất dữ liệu, ghi lại khoảng trống, không đệm |
 | Q11 | Serial JSON lines 115200 |
 | Q12 | Telemetry 30 s, offline 90 s, ACK 300 ms × 3 retry, fallback 5 phút, beacon 60 s |
-| Q13 | Bảng MAC ghi cứng, `ZONE_ID` qua build flag, kênh 1 |
+| Q13 | Bảng MAC ghi cứng trong `app_config.h`, Zone ID đặt qua console và lưu NVS, kênh 1 |
 | Q14 | Soil GPIO34, SHT30 21/22, relay GPIO26 (active-LOW), LED GPIO2 |
 | Q15 | Nhãn theo tương lai (H = 2 giờ); thời lượng học từ sự kiện tưới thực tế |
 | Q16 | Hiệu chuẩn khô/ướt → %; median + EMA; `soil_low` 35%, `soil_target` 60%; bơm ≤ 30 s; cooldown 10 phút; fallback 10 s |

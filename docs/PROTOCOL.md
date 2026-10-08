@@ -1,12 +1,12 @@
 # Khung gói tin ESP-NOW (Node ⇄ Gateway)
 
-> Tài liệu chi tiết cho §5 của [DESIGN.md](DESIGN.md). Mã nguồn: [firmware/lib/protocol/protocol.h](../firmware/lib/protocol/protocol.h)
+> Tài liệu chi tiết cho §5 của [DESIGN.md](DESIGN.md). Mã nguồn: [firmware/components/common/include/protocol.h](../firmware/components/common/include/protocol.h)
 
 ## 1. Quy ước chung
 
 | Mục | Quy ước |
 |---|---|
-| Truyền | ESP-NOW unicast theo MAC (bảng ghi cứng trong `config.h`), kênh 1 |
+| Truyền | ESP-NOW unicast theo MAC (bảng ghi cứng trong `app_config.h`), kênh 1 |
 | Mã hóa byte | Little-endian, struct `#pragma pack(1)` (không padding) |
 | Kích thước | Tối đa 19 byte (ESP-NOW cho phép 250 byte) |
 | Kiểm lỗi | CRC32 có sẵn ở lớp MAC 802.11. Tầng ứng dụng kiểm tra `type` hợp lệ và `len == sizeof(struct)` (`msg_validate()`) |
