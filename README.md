@@ -1,6 +1,6 @@
 # Multi-zone smart irrigation system
 
-Hệ thống tưới cây thông minh đa vùng: 3 nút ESP32 (độ ẩm đất, SHT30, bơm) giao tiếp ESP-NOW với 1 ESP32 gateway; gateway nối USB-Serial tới server cục bộ (FastAPI + MongoDB + AI Random Forest/XGBoost + web dashboard).
+Hệ thống tưới cây thông minh đa vùng: 3 nút ESP32 (độ ẩm đất, DHT22, bơm) giao tiếp ESP-NOW với 1 ESP32 gateway; gateway nối USB-Serial tới server cục bộ (FastAPI + MongoDB + AI Random Forest/XGBoost + web dashboard).
 
 Thiết kế chi tiết: [docs/DESIGN.md](docs/DESIGN.md)
 

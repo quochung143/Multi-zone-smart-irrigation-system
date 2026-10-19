@@ -19,8 +19,7 @@ static const uint8_t NODE_MAC[NUM_ZONES][6] = {
 
 // ===== Chân (node) =====
 #define PIN_SOIL_ADC_CHANNEL  ADC_CHANNEL_6  // GPIO34, ADC1
-#define PIN_SDA               21
-#define PIN_SCL               22
+#define PIN_DHT               27             // DHT22 DATA (kéo lên 4.7–10k)
 #define PIN_RELAY             26             // relay active-LOW
 #define PIN_LED               2
 #define RELAY_ON_LEVEL        0
@@ -30,7 +29,8 @@ static const uint8_t NODE_MAC[NUM_ZONES][6] = {
 #define TELEMETRY_PERIOD_MS   30000
 #define TELEMETRY_FIRST_MS    2000    // gói đầu sau boot (+ zone giây để lệch pha)
 #define SENSOR_PERIOD_MS      1000
-#define SHT_PERIOD_MS         5000
+#define AIR_PERIOD_MS         5000    // DHT22: tối thiểu 2 s giữa 2 lần đọc
+#define AIR_FIRST_MS          2000    // DHT22 cần ~2 s sau khi cấp nguồn
 #define NODE_OFFLINE_MS       90000   // gateway: 3 chu kỳ không nhận
 #define BEACON_PERIOD_MS      60000
 #define FALLBACK_TIMEOUT_MS   300000  // node: 5 phút không nghe gateway
@@ -50,7 +50,6 @@ static const uint8_t NODE_MAC[NUM_ZONES][6] = {
 #define ADC_VALID_MAX         4000
 #define ADC_CAL_MARGIN        300     // cho phép vượt mốc khô/ướt đã hiệu chuẩn
 #define CAL_MIN_SPAN          500     // khô - ướt tối thiểu
-#define SHT30_ADDR            0x44
 #define PUMP_TASK_PERIOD_MS   100
 
 // ===== An toàn bơm =====

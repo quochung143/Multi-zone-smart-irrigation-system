@@ -7,7 +7,7 @@ typedef struct {
     float    soil_pct;  // 0..100 theo hiệu chuẩn
     float    temp_c;    // NAN nếu chưa đọc được
     float    hum_pct;   // NAN nếu chưa đọc được
-    uint8_t  flags;     // FLAG_SHT_ERR | FLAG_ADC_ERR
+    uint8_t  flags;     // FLAG_AIR_ERR | FLAG_ADC_ERR
     bool     ready;     // đã có ít nhất 1 mẫu độ ẩm đất
 } sensor_data_t;
 

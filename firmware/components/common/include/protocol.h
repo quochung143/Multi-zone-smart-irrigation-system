@@ -23,7 +23,7 @@ typedef enum { SRC_CMD = 0, SRC_FALLBACK = 1, SRC_SAFETY_STOP = 2 } pump_source_
 typedef enum { ACK_OK = 0, ACK_REJ_COOLDOWN = 1, ACK_REJ_BUSY = 2, ACK_REJ_INVALID = 3 } ack_status_t;
 
 // Bit trong msg_telemetry_t.flags
-#define FLAG_SHT_ERR   0x01
+#define FLAG_AIR_ERR   0x01  // lỗi DHT22 (nhiệt độ/độ ẩm không khí)
 #define FLAG_ADC_ERR   0x02
 #define FLAG_COOLDOWN  0x04
 

@@ -48,7 +48,7 @@ static int cmd_status(int argc, char **argv)
     printf("Zone %u%s | uptime %lus\n", zone, zone ? "" : " (CHUA DAT)", (unsigned long)(now_ms() / 1000));
     printf("Soil: raw=%u pct=%.1f%% (cal dry=%u wet=%u)%s\n", s.soil_raw, s.soil_pct, c.dry, c.wet,
            (s.flags & FLAG_ADC_ERR) ? " [ADC ERR]" : "");
-    printf("SHT30: temp=%.2fC hum=%.1f%%%s\n", s.temp_c, s.hum_pct, (s.flags & FLAG_SHT_ERR) ? " [SHT ERR]" : "");
+    printf("DHT22: temp=%.1fC hum=%.1f%%%s\n", s.temp_c, s.hum_pct, (s.flags & FLAG_AIR_ERR) ? " [DHT ERR]" : "");
     printf("Pump: %s", p.on ? "ON" : "OFF");
     if (p.on) printf(" src=%s seq=%u %lu/%us", pump_source_name(p.source), p.cmd_seq,
                      (unsigned long)(p.elapsed_ms / 1000), p.target_s);

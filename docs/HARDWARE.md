@@ -17,14 +17,14 @@
                                        ┌────────────────────┴───────────┐
                                        ▼                                ▼
                             ┌────────────────────┐          ┌────────────────────┐
-                            │ Cảm biến độ ẩm đất  │          │ SHT30 (I2C 0x44)    │
-                            │ điện dung → GPIO34  │          │ SDA 21 / SCL 22     │
+                            │ Cảm biến độ ẩm đất  │          │ DHT22 (1-wire)      │
+                            │ điện dung → GPIO34  │          │ DATA → GPIO27       │
                             └────────────────────┘          └────────────────────┘
 ```
 
 ## 2. Sơ đồ nguyên lý
 
-Vẽ theo từng khối, các khối nối với nhau qua **nhãn net** (`+5V`, `+3V3`, `GND`, `SOIL_AO`, `I2C_SDA`, `I2C_SCL`, `RELAY_IN`, `PUMP+`), giống cách đặt net label trong KiCad/EasyEDA.
+Vẽ theo từng khối, các khối nối với nhau qua **nhãn net** (`+5V`, `+3V3`, `GND`, `SOIL_AO`, `DHT_DATA`, `RELAY_IN`, `PUMP+`), giống cách đặt net label trong KiCad/EasyEDA.
 
 ### 2.1 Khối nguồn
 
@@ -44,8 +44,7 @@ Vẽ theo từng khối, các khối nối với nhau qua **nhãn net** (`+5V`, 
      +5V ────────┤ VIN               3V3  ├──────── +3V3  (LDO onboard, cấp cho cảm biến)
      GND ────────┤ GND                    │
                  │                 GPIO34 ├──────── SOIL_AO   (ADC1_CH6)
-                 │                 GPIO21 ├──────── I2C_SDA
-                 │                 GPIO22 ├──────── I2C_SCL
+                 │                 GPIO27 ├──────── DHT_DATA  (RMT RX + open-drain)
                  │                 GPIO26 ├──────── RELAY_IN  (kích LOW)
                  │                  GPIO2 ├── LED onboard (trạng thái)
                  │                    USB ├── nạp code / console Serial
@@ -55,14 +54,14 @@ Vẽ theo từng khối, các khối nối với nhau qua **nhãn net** (`+5V`, 
 ### 2.3 Khối cảm biến
 
 ```
- U2 Cảm biến độ ẩm đất điện dung           U3 SHT30 module
- ┌──────────┐                              ┌──────────┐
- │ VCC      ├── +3V3                       │ VIN      ├── +3V3
- │ GND      ├── GND                        │ GND      ├── GND
- │ AOUT     ├──┬── SOIL_AO                 │ SDA      ├── I2C_SDA   (pull-up 10k có sẵn)
- └──────────┘  │                           │ SCL      ├── I2C_SCL
-          C4  ═╪═ 100nF                    │ ADDR     ├── GND       (địa chỉ 0x44)
-               │                           └──────────┘
+ U2 Cảm biến độ ẩm đất điện dung           U3 DHT22 / AM2302
+ ┌──────────┐                              ┌──────────┐        +3V3
+ │ VCC      ├── +3V3                       │ VCC (1)  ├── +3V3    │
+ │ GND      ├── GND                        │ DATA (2) ├──────┬────┴─ R1 10k (module 3 chân có sẵn)
+ │ AOUT     ├──┬── SOIL_AO                 │ NC   (3) │      └── DHT_DATA
+ └──────────┘  │                           │ GND  (4) ├── GND
+          C4  ═╪═ 100nF                    └──────────┘
+               │
               GND
 ```
 
@@ -91,11 +90,10 @@ Relay **đóng** (IN = LOW) thì `COM`–`NO` thông, +5V cấp vào bơm. D1 m�
 | Net | Kết nối |
 |---|---|
 | **+5V** | Adapter (+), ESP32 `VIN`, Relay `VCC`, Relay `COM`, C1 (+), C3 (+) |
-| **+3V3** | ESP32 `3V3`, Soil `VCC`, SHT30 `VIN` |
-| **GND** | Adapter (−), ESP32 `GND`, Soil `GND`, SHT30 `GND`, SHT30 `ADDR`, Relay `GND`, Bơm (−), D1 anode, C1–C4 (−) |
+| **+3V3** | ESP32 `3V3`, Soil `VCC`, DHT22 `VCC`, R1 |
+| **GND** | Adapter (−), ESP32 `GND`, Soil `GND`, DHT22 `GND`, Relay `GND`, Bơm (−), D1 anode, C1–C4 (−) |
 | **SOIL_AO** | Soil `AOUT`, ESP32 `GPIO34`, C4 |
-| **I2C_SDA** | SHT30 `SDA`, ESP32 `GPIO21` |
-| **I2C_SCL** | SHT30 `SCL`, ESP32 `GPIO22` |
+| **DHT_DATA** | DHT22 `DATA`, ESP32 `GPIO27`, R1 |
 | **RELAY_IN** | Relay `IN`, ESP32 `GPIO26` |
 | **PUMP+** | Relay `NO`, Bơm (+), D1 cathode, C2 |
 
@@ -105,7 +103,8 @@ Relay **đóng** (IN = LOW) thì `COM`–`NO` thông, +5V cấp vào bơm. D1 m�
 |---|---|---|---|
 | U1 | ESP32 DevKit V1 | ESP32-WROOM-32 | Vi điều khiển, ESP-NOW |
 | U2 | Cảm biến độ ẩm đất điện dung | v1.2 / v2.0 | Đo độ ẩm đất (analog) |
-| U3 | Module SHT30 | I2C 0x44 | Nhiệt độ, độ ẩm không khí |
+| U3 | DHT22 / AM2302 | Module 3 chân hoặc cảm biến 4 chân | Nhiệt độ, độ ẩm không khí |
+| R1 | Điện trở kéo lên | 10 kΩ (4.7–10 kΩ) | Kéo DATA lên 3.3V (module 3 chân đã có sẵn) |
 | K1 | Module relay 1 kênh | 5V, opto, kích LOW | Đóng/ngắt bơm |
 | M1 | Bơm chìm mini | 5V DC, ~100–200 mA | Tưới |
 | D1 | Diode Schottky | 1N5819 (hoặc 1N4007) | Dập điện áp ngược của động cơ |
@@ -124,10 +123,13 @@ Relay **đóng** (IN = LOW) thì `COM`–`NO` thông, +5V cấp vào bơm. D1 m�
 - Cấp **3.3V** cho cảm biến để AOUT không vượt dải ADC. Attenuation 11 dB → dải đo ≈ 0–3.1 V.
 - Đặc tính cảm biến: **đất khô → ADC cao, đất ướt → ADC thấp**. Firmware quy đổi ra % bằng hai mốc hiệu chuẩn (§6).
 
-### 5.2 SHT30 → I2C GPIO21/22
+### 5.2 DHT22 → GPIO27
 
-- Module SHT30 thường có sẵn điện trở kéo lên 10 kΩ. Không cần thêm.
-- `ADDR` nối GND → địa chỉ 0x44. Dây I2C nên dài dưới 1 m.
+- DHT22 dùng giao thức 1 dây riêng: bit 0/1 phân biệt bằng độ dài xung HIGH (~27 µs / ~70 µs). Nếu tự canh thời gian trong code, ngắt Wi-Fi/ESP-NOW sẽ làm đọc sai. Firmware đọc bằng **RMT RX**: phần cứng tự đo độ rộng từng xung với độ phân giải 1 µs.
+- Cùng một chân vừa phát tín hiệu bắt đầu (open-drain, kéo LOW 3 ms) vừa để RMT nhận. GPIO27 không phải chân strapping, không thuộc ADC1, nên không ảnh hưởng khối khác.
+- Cần điện trở kéo lên 4.7–10 kΩ lên **3.3V** (module 3 chân đã có sẵn). Cấp 3.3V để mức logic DATA không vượt mức chịu đựng của ESP32.
+- Khoảng cách giữa 2 lần đọc phải ≥ 2 s (firmware đọc mỗi 5 s); lần đọc đầu tiên sau khi cấp nguồn 2 s.
+- Đặt cảm biến ở chỗ thoáng, tránh nước tưới bắn vào: DHT22 dễ trôi số khi ở lâu trong độ ẩm cao. Dây DATA nên dưới 1 m (dài hơn thì dùng điện trở 4.7 kΩ).
 
 ### 5.3 Relay → GPIO26
 

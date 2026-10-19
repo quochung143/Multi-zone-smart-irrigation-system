@@ -8,7 +8,7 @@
 
 ## 1. Tổng quan
 
-Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm đất điện dung + SHT30 + relay bơm) gửi dữ liệu không dây bằng **ESP-NOW** tới **1 ESP32 Gateway**. Gateway nối **USB-Serial** với **server cục bộ (laptop)**. Server chạy:
+Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm đất điện dung + DHT22 + relay bơm) gửi dữ liệu không dây bằng **ESP-NOW** tới **1 ESP32 Gateway**. Gateway nối **USB-Serial** với **server cục bộ (laptop)**. Server chạy:
 
 - Backend **Python/FastAPI**: đọc Serial, xử lý dữ liệu, ra quyết định tưới.
 - **MongoDB**: lưu dữ liệu cảm biến, lịch sử tưới, kết quả dự đoán.
@@ -35,7 +35,7 @@ Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm 
 
 ```
  ┌──────────── Zone 1 ───────────┐
- │ Soil(ADC) SHT30(I2C) Relay→Bơm │
+ │ Soil(ADC) DHT22(1-wire) Relay→Bơm │
  │        ESP32 DevKit V1         │──┐
  └────────────────────────────────┘  │
  ┌──────────── Zone 2 ───────────┐   │  ESP-NOW (2.4 GHz, kênh 1)
@@ -81,7 +81,7 @@ Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm 
 |---|---|---|---|
 | 1 | ESP32 DevKit V1 (ESP32-WROOM-32) | 4 | 3 nút Zone + 1 gateway |
 | 2 | Cảm biến độ ẩm đất điện dung v1.2/v2.0 | 3 | Ngõ ra analog, cấp 3.3V |
-| 3 | Cảm biến SHT30 (module I2C) | 3 | Địa chỉ 0x44 |
+| 3 | Cảm biến DHT22 / AM2302 (module 3 chân) | 3 | Nhiệt độ ±0.5 °C, độ ẩm ±2–5 %RH; loại cảm biến trần cần thêm điện trở kéo lên 10 kΩ |
 | 4 | Module relay 1 kênh 5V, có opto, kích mức LOW | 3 | |
 | 5 | Bơm chìm mini 5V DC | 3 | Mỗi Zone một bơm và một bình nước riêng |
 | 6 | Adapter 5V/2A | 3 | Mỗi Zone một adapter, cấp cho bơm + ESP32 |
@@ -95,8 +95,7 @@ Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm 
 | Chức năng | GPIO | Ghi chú |
 |---|---|---|
 | Cảm biến độ ẩm đất (AOUT) | **GPIO34** | ADC1_CH6, chỉ nhận đầu vào, không xung đột Wi-Fi. Attenuation 11 dB. |
-| SHT30 SDA | **GPIO21** | I2C mặc định, pull-up có sẵn trên module |
-| SHT30 SCL | **GPIO22** | |
+| DHT22 DATA | **GPIO27** | Đọc bằng RMT RX, open-drain + kéo lên 10 kΩ |
 | Relay IN | **GPIO26** | Kích mức LOW. Khởi động ở trạng thái **HIGH (OFF)**. |
 | LED trạng thái | GPIO2 | LED onboard |
 
@@ -106,7 +105,7 @@ Hệ thống gồm **3 nút Zone** (mỗi nút: ESP32 + cảm biến độ ẩm 
 ### 3.3 Sơ đồ nguồn — nút Zone
 
 ```
-Adapter 5V/2A ──┬── VIN ESP32 (LDO onboard → 3.3V → Soil sensor, SHT30)
+Adapter 5V/2A ──┬── VIN ESP32 (LDO onboard → 3.3V → Soil sensor, DHT22)
                 ├── VCC relay module
                 └── COM relay ─ NO ─► (+) Bơm 5V (−) ─► GND
                                      tụ 1000µF song song bơm
@@ -129,7 +128,7 @@ Một ESP32 DevKit V1 cắm USB vào laptop, lấy nguồn từ USB, không gắ
 - Hai project IDF: `firmware/node` và `firmware/gateway`, dùng chung component `firmware/components/common`:
   - `protocol.h`: struct gói tin ESP-NOW.
   - `app_config.h`: bảng MAC, kênh Wi-Fi, chân GPIO, hằng số thời gian.
-- Driver: `esp_adc` (oneshot, ADC1), `i2c_master` (driver SHT30 tự viết, kiểm CRC-8), `esp_now`, `esp_console` (REPL trên nút), `cJSON` (gateway).
+- Driver: `esp_adc` (oneshot, ADC1), `rmt` RX (driver DHT22 tự viết, kiểm checksum), `esp_now`, `esp_console` (REPL trên nút), `cJSON` (gateway).
 - **Một firmware cho cả 3 nút**: Zone ID đặt bằng lệnh console `zone <1-3>` và lưu trong NVS. Chưa đặt zone thì nút không gửi/nhận ESP-NOW.
 - Mở môi trường build: `. firmware\idf_env.ps1` (PowerShell), rồi `idf.py build flash monitor` trong `firmware/node` hoặc `firmware/gateway`.
 
@@ -141,7 +140,7 @@ static const uint8_t NODE_MAC[3][6]    = { {...}, {...}, {...} }; // Zone 1..3
 
 #define TELEMETRY_PERIOD_MS   30000
 #define SENSOR_PERIOD_MS      1000
-#define SHT_PERIOD_MS         5000
+#define AIR_PERIOD_MS         5000    // DHT22: tối thiểu 2 s
 #define NODE_OFFLINE_MS       90000    // gateway: 3 chu kỳ không nhận
 #define BEACON_PERIOD_MS      60000
 #define FALLBACK_TIMEOUT_MS   300000   // node: 5 phút không nghe gateway
@@ -156,7 +155,7 @@ static const uint8_t NODE_MAC[3][6]    = { {...}, {...}, {...} }; // Zone 1..3
 
 | Task | Chu kỳ | Nhiệm vụ |
 |---|---|---|
-| `sensorTask` | 1 s | Đọc ADC (16 mẫu → median 5 → EMA α=0.2), quy đổi %; đọc SHT30 mỗi 5 s; ghi lỗi nếu SHT30 không phản hồi. |
+| `sensorTask` | 1 s | Đọc ADC (16 mẫu → median 5 → EMA α=0.2), quy đổi %; đọc DHT22 mỗi 5 s (lần đầu sau 2 s); ghi lỗi nếu DHT22 không phản hồi hoặc sai checksum. |
 | `commTask` | 30 s + sự kiện | Gửi `TELEMETRY`; xử lý queue RX (`CMD_WATER`, `CMD_STOP`, `CONFIG`, `BEACON`); gửi `ACK`, `PUMP_EVENT`. |
 | `pumpTask` | 100 ms | Máy trạng thái bơm, áp giới hạn an toàn, tắt bơm khi hết giờ. |
 | `supervisorTask` | 1 s | Theo dõi `last_gateway_rx`, chuyển NORMAL ⇄ FALLBACK; điều khiển LED. |
@@ -233,7 +232,7 @@ typedef struct {
   uint16_t hum_x100;   // %RH × 100
   uint8_t  pump_on;    // 0/1
   uint8_t  node_mode;  // 0=NORMAL, 1=FALLBACK
-  uint8_t  flags;      // bit0: lỗi SHT30, bit1: lỗi ADC, bit2: đang cooldown
+  uint8_t  flags;      // bit0: lỗi DHT22, bit1: lỗi ADC, bit2: đang cooldown
   uint32_t uptime_s;
 } MsgTelemetry;        // 19 byte
 
@@ -464,7 +463,7 @@ Trang duy nhất `http://localhost:8000/`, viết bằng HTML/JS thuần + Chart
 
 | Lớp | Cơ chế |
 |---|---|
-| Nút (cứng) | Bơm tối đa `PUMP_MAX_S = 30 s` mỗi lần. Cooldown 10 phút. Relay mặc định OFF khi boot/reset. Bỏ qua lệnh trùng `seq`. Mất SHT30 vẫn chạy (gửi kèm flag). Mất cảm biến đất (ADC ngoài khoảng hiệu chuẩn) thì **không** tưới fallback. |
+| Nút (cứng) | Bơm tối đa `PUMP_MAX_S = 30 s` mỗi lần. Cooldown 10 phút. Relay mặc định OFF khi boot/reset. Bỏ qua lệnh trùng `seq`. Mất DHT22 vẫn chạy (gửi kèm flag). Mất cảm biến đất (ADC ngoài khoảng hiệu chuẩn) thì **không** tưới fallback. |
 | Nút (fallback) | 5 phút mất gateway thì tưới theo ngưỡng cục bộ, `FALLBACK_WATER_S = 10 s`. |
 | Gateway | Phát hiện nút offline sau 90 s. Báo lệnh `timeout` sau 3 lần retry. |
 | Server | Cooldown phía server. Không quyết định khi dữ liệu cũ hoặc nút offline. Clip `dur` ∈ [3, `pump_max_s`]. Tự kết nối lại Serial. |
@@ -478,7 +477,7 @@ Các con số 30 s và 10 s sẽ chỉnh lại sau khi đo lưu lượng bơm th
 
 | Mức | Nội dung | Tiêu chí đạt |
 |---|---|---|
-| Đơn vị (nút) | Đọc ADC, hiệu chuẩn, SHT30, relay | Độ ẩm khô ≈ 0%, ướt ≈ 100%; nhiễu sau lọc < ±1% |
+| Đơn vị (nút) | Đọc ADC, hiệu chuẩn, DHT22, relay | Độ ẩm khô ≈ 0%, ướt ≈ 100%; nhiễu sau lọc < ±1% |
 | ESP-NOW | Gửi/nhận 3 nút ↔ gateway, ACK/retry, lệnh trùng seq | Lệnh trùng không bơm 2 lần; tỉ lệ nhận > 99% ở khoảng cách 5 m |
 | Tầm truyền | Đo tỉ lệ mất gói theo khoảng cách (5/10/20/30 m, có/không vật cản) | Bảng tỉ lệ mất gói + RSSI |
 | Mất liên lạc | Rút gateway, đợi > 5 phút | Nút vào FALLBACK và tưới đúng ngưỡng; cắm lại thì về NORMAL |
@@ -496,7 +495,7 @@ doan2/
 ├── firmware/
 │   ├── idf_env.ps1             # nạp môi trường ESP-IDF (D:\esp)
 │   ├── components/common/      # protocol.h, app_config.h (MAC, chân, hằng số)
-│   ├── node/                   # project IDF: main.c, sensor.c, sht30.c, pump.c, comm.c, console.c, settings.c
+│   ├── node/                   # project IDF: main.c, sensor.c, dht22.c, pump.c, comm.c, console.c, settings.c
 │   └── gateway/                # project IDF: main.c, uplink.c, cmd.c
 ├── server/
 │   ├── app/
@@ -547,7 +546,7 @@ doan2/
 | # | Quyết định |
 |---|---|
 | Q1 | Tài liệu kỹ thuật nội bộ, `docs/DESIGN.md` |
-| Q2 | ESP32 DevKit V1, **ESP-IDF v5.5.5** (C), task FreeRTOS |
+| Q2 | ESP32 DevKit V1, **ESP-IDF v5.5.5** (C), task FreeRTOS; cảm biến không khí **DHT22** (thay SHT30) |
 | Q3 | Python + FastAPI + WebSocket, frontend HTML/JS + Chart.js |
 | Q4 | MongoDB (local Community, `motor`, `readings` là time-series) |
 | Q5 | Server chạy trên laptop, tắt chế độ ngủ khi thu dữ liệu |
@@ -558,7 +557,7 @@ doan2/
 | Q11 | Serial JSON lines 115200 |
 | Q12 | Telemetry 30 s, offline 90 s, ACK 300 ms × 3 retry, fallback 5 phút, beacon 60 s |
 | Q13 | Bảng MAC ghi cứng trong `app_config.h`, Zone ID đặt qua console và lưu NVS, kênh 1 |
-| Q14 | Soil GPIO34, SHT30 21/22, relay GPIO26 (active-LOW), LED GPIO2 |
+| Q14 | Soil GPIO34, DHT22 GPIO27, relay GPIO26 (active-LOW), LED GPIO2 |
 | Q15 | Nhãn theo tương lai (H = 2 giờ); thời lượng học từ sự kiện tưới thực tế |
 | Q16 | Hiệu chuẩn khô/ướt → %; median + EMA; `soil_low` 35%, `soil_target` 60%; bơm ≤ 30 s; cooldown 10 phút; fallback 10 s |
 | Q17 | Dashboard 1 trang, không đăng nhập |

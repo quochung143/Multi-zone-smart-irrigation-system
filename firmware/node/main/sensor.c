@@ -1,10 +1,11 @@
-// Node Zone: đọc + lọc độ ẩm đất, hiệu chuẩn khô/ướt, đọc SHT30 (docs/DESIGN.md §4.2)
+// Node Zone: đọc + lọc độ ẩm đất, hiệu chuẩn khô/ướt, đọc DHT22 (docs/DESIGN.md §4.2)
 #include "sensor.h"
 
 #include <math.h>
 #include <string.h>
 
 #include "app_config.h"
+#include "dht22.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
@@ -14,7 +15,6 @@
 #include "freertos/task.h"
 #include "nvs.h"
 #include "protocol.h"
-#include "sht30.h"
 
 static const char *TAG = "sensor";
 
@@ -23,7 +23,7 @@ static sensor_data_t data;
 static soil_cal_t cal = {ADC_DEFAULT_DRY, ADC_DEFAULT_WET};
 
 static adc_oneshot_unit_handle_t adc;
-static bool sht_ready = false;
+static bool dht_ready = false;
 
 static uint16_t median_buf[SOIL_MEDIAN_N];
 static uint8_t median_count = 0;
@@ -99,21 +99,19 @@ static void sensor_task(void *arg)
 {
     esp_task_wdt_add(NULL);
     TickType_t last_wake = xTaskGetTickCount();
-    uint32_t last_sht_ms = 0;
-    bool first = true;
+    uint32_t next_air_ms = AIR_FIRST_MS;
 
     for (;;) {
         esp_task_wdt_reset();
         uint16_t med = median_push(read_oversampled());
         ema_raw = (ema_raw < 0) ? med : SOIL_EMA_ALPHA * med + (1.0f - SOIL_EMA_ALPHA) * ema_raw;
 
-        bool sht_read = false, sht_ok = false;
+        bool air_read = false, air_ok = false;
         float t = NAN, h = NAN;
-        if (first || now_ms() - last_sht_ms >= SHT_PERIOD_MS) {
-            first = false;
-            last_sht_ms = now_ms();
-            sht_read = true;
-            sht_ok = sht_ready && sht30_read(&t, &h) == ESP_OK;
+        if ((int32_t)(now_ms() - next_air_ms) >= 0) {
+            next_air_ms = now_ms() + AIR_PERIOD_MS;
+            air_read = true;
+            air_ok = dht_ready && dht22_read(&t, &h) == ESP_OK;
         }
 
         xSemaphoreTake(mtx, portMAX_DELAY);
@@ -122,13 +120,13 @@ static void sensor_task(void *arg)
         data.ready = true;
         if (raw_valid(med, cal)) data.flags &= ~FLAG_ADC_ERR;
         else data.flags |= FLAG_ADC_ERR;
-        if (sht_read) {
-            if (sht_ok) {
+        if (air_read) {
+            if (air_ok) {
                 data.temp_c = t;
                 data.hum_pct = h;
-                data.flags &= ~FLAG_SHT_ERR;
+                data.flags &= ~FLAG_AIR_ERR;
             } else {
-                data.flags |= FLAG_SHT_ERR;
+                data.flags |= FLAG_AIR_ERR;
             }
         }
         xSemaphoreGive(mtx);
@@ -147,8 +145,8 @@ void sensor_init(void)
     adc_oneshot_chan_cfg_t chan_cfg = {.atten = ADC_ATTEN_DB_12, .bitwidth = ADC_BITWIDTH_12};  // ~0..3.1 V
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc, PIN_SOIL_ADC_CHANNEL, &chan_cfg));
 
-    sht_ready = sht30_init(PIN_SDA, PIN_SCL, SHT30_ADDR) == ESP_OK;
-    if (!sht_ready) ESP_LOGE(TAG, "khoi tao I2C loi");
+    dht_ready = dht22_init(PIN_DHT) == ESP_OK;
+    if (!dht_ready) ESP_LOGE(TAG, "khoi tao DHT22 (RMT) loi");
 
     nvs_handle_t h;
     if (nvs_open("cal", NVS_READONLY, &h) == ESP_OK) {

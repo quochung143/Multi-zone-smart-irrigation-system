@@ -46,7 +46,7 @@ Nút gửi mỗi 30 giây. Gói này đồng thời là heartbeat.
 | 10 | `hum_x100` | uint16 | Độ ẩm không khí %RH × 100 |
 | 12 | `pump_on` | uint8 | Trạng thái bơm: 0 = tắt, 1 = đang chạy |
 | 13 | `node_mode` | uint8 | 0 = NORMAL, 1 = FALLBACK |
-| 14 | `flags` | uint8 | bit0 lỗi SHT30, bit1 lỗi cảm biến đất, bit2 đang cooldown |
+| 14 | `flags` | uint8 | bit0 lỗi DHT22, bit1 lỗi cảm biến đất, bit2 đang cooldown |
 | 15 | `uptime_s` | uint32 | Thời gian chạy của nút (giây) |
 
 Ví dụ: Zone 1, seq 120, raw 2345, độ ẩm đất 43.2 %, 28.41 °C, 71.20 %RH, bơm tắt, uptime 3600 s:
