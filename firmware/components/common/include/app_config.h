@@ -33,6 +33,8 @@ static const uint8_t NODE_MAC[NUM_ZONES][6] = {
 #define AIR_FIRST_MS          2000    // DHT22 cần ~2 s sau khi cấp nguồn
 #define NODE_OFFLINE_MS       90000   // gateway: 3 chu kỳ không nhận
 #define BEACON_PERIOD_MS      60000
+#define STAT_PERIOD_MS        60000   // gateway: chu kỳ in dòng "stat" (mất gói theo zone)
+#define STAT_MAX_GAP          100     // khoảng nhảy seq lớn hơn = nút đã reset, không tính mất gói
 #define FALLBACK_TIMEOUT_MS   300000  // node: 5 phút không nghe gateway
 #define SERVER_TIMEOUT_MS     180000  // gateway: không nghe server 3 phút thì ngừng beacon
 #define CMD_RETRY_MAX         3

@@ -23,6 +23,14 @@ static volatile uint32_t last_seen_ms[NUM_ZONES];
 static volatile bool seen[NUM_ZONES];
 static uint16_t beacon_seq = 0;
 
+// Thống kê theo zone từ seq uplink (mọi loại gói dùng chung bộ đếm), cộng dồn từ lúc gateway khởi động
+typedef struct {
+    uint32_t rx, lost, dup, bad;
+    uint16_t last_seq;
+    bool     has_seq;
+} zone_stat_t;
+static zone_stat_t stats[NUM_ZONES];
+
 static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
 {
     int zone = zone_from_mac(info->src_addr);
@@ -53,18 +61,35 @@ static void emit_pump_event(uint8_t zone, const msg_pump_event_t *m)
     serial_out(line);
 }
 
+// Gói gửi lại (nút không nhận được ACK lớp MAC) có seq trùng; nút reset thì seq nhảy về 1.
+static void count_seq(zone_stat_t *st, uint16_t seq)
+{
+    st->rx++;
+    if (st->has_seq) {
+        uint16_t gap = (uint16_t)(seq - st->last_seq);
+        if (gap == 0) st->dup++;
+        else if (gap <= STAT_MAX_GAP) st->lost += gap - 1;
+    }
+    st->last_seq = seq;
+    st->has_seq = true;
+}
+
 static void handle_packet(const rx_packet_t *pkt)
 {
+    zone_stat_t *st = &stats[pkt->zone - 1];
     if (!msg_validate(pkt->data, pkt->len)) {
+        st->bad++;
         serial_out("# goi sai dinh dang");
         return;
     }
     msg_header_t h;
     memcpy(&h, pkt->data, sizeof(h));
     if (h.zone_id != pkt->zone) {
+        st->bad++;
         serial_out("# zone_id khong khop MAC");
         return;
     }
+    count_seq(st, h.seq);
     last_seen_ms[pkt->zone - 1] = now_ms();
     seen[pkt->zone - 1] = true;
 
@@ -111,12 +136,27 @@ static void send_beacons(void)
     }
 }
 
-// Mỗi giây: kiểm tra online/offline; mỗi BEACON_PERIOD_MS: beacon nếu server còn sống.
+static void emit_stats(void)
+{
+    for (int i = 0; i < NUM_ZONES; i++) {
+        const zone_stat_t *st = &stats[i];
+        if (!st->rx && !st->bad) continue;
+        char line[112];
+        snprintf(line, sizeof(line), "{\"t\":\"stat\",\"zone\":%d,\"rx\":%lu,\"lost\":%lu,\"dup\":%lu,\"bad\":%lu}",
+                 i + 1, (unsigned long)st->rx, (unsigned long)st->lost, (unsigned long)st->dup,
+                 (unsigned long)st->bad);
+        serial_out(line);
+    }
+}
+
+// Mỗi giây: kiểm tra online/offline; mỗi BEACON_PERIOD_MS: beacon nếu server còn sống;
+// mỗi STAT_PERIOD_MS: dòng "stat".
 static void liveness_task(void *arg)
 {
     esp_task_wdt_add(NULL);
     bool reported_online[NUM_ZONES] = {false};
     uint32_t last_beacon_ms = 0;
+    uint32_t last_stat_ms = now_ms();
 
     for (;;) {
         esp_task_wdt_reset();
@@ -139,6 +179,10 @@ static void liveness_task(void *arg)
         if (alive && now - last_beacon_ms >= BEACON_PERIOD_MS) {
             last_beacon_ms = now;
             send_beacons();
+        }
+        if (now - last_stat_ms >= STAT_PERIOD_MS) {
+            last_stat_ms = now;
+            emit_stats();
         }
 
         vTaskDelay(pdMS_TO_TICKS(1000));

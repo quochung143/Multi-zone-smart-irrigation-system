@@ -160,4 +160,17 @@ sequenceDiagram
 | `PUMP_EVENT` | `{"t":"pump","zone":2,"on":0,"src":"cmd","cmd_seq":7,"dur":15}` |
 | `ACK` | `{"t":"ack","zone":2,"seq":7,"status":"ok"}` |
 
+Gateway còn tự phát mỗi 60 s một dòng thống kê cho mỗi zone đã nhận gói:
+
+`{"t":"stat","zone":1,"rx":120,"lost":2,"dup":1,"bad":0}`
+
+| Trường | Ý nghĩa |
+|---|---|
+| `rx` | Số gói hợp lệ đã nhận (mọi loại) |
+| `lost` | Tổng số `seq` bị nhảy cóc. Mọi gói uplink của nút dùng chung bộ đếm `seq` nên chỉ gateway (thấy mọi gói) mới đếm được; nhảy > 100 coi là nút reset, không tính |
+| `dup` | Gói trùng `seq` (nút gửi lại vì mất ACK lớp MAC) |
+| `bad` | Gói sai định dạng hoặc `zone_id` không khớp MAC |
+
+Tỉ lệ mất gói = `lost / (rx + lost)`. Bộ đếm cộng dồn từ lúc gateway khởi động.
+
 Chiều xuống và các bản tin khác: xem DESIGN.md §6.

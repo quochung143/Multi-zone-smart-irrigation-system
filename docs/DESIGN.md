@@ -191,7 +191,7 @@ Lệnh bị từ chối (đang cooldown / đang chạy) → ACK status = REJECTE
 | `uplinkTask` | Lấy gói từ `rxQueue`, kiểm tra MAC thuộc bảng, cập nhật `last_seen[zone]`, in JSON ra Serial. |
 | `serialRxTask` | Đọc từng dòng từ Serial, parse JSON, rồi xếp lệnh vào `cmdQueue[zone]`. |
 | `cmdTask` | Gửi lệnh, chờ ACK (300 ms), retry ≤ 3 lần; báo kết quả `ok` / `rejected` / `timeout` lên server. |
-| `livenessTask` (1 s) | Nếu `now - last_seen[zone] > 90 s` thì phát `{"t":"node","zone":z,"online":false}` (chỉ phát khi trạng thái đổi). |
+| `livenessTask` (1 s) | Nếu `now - last_seen[zone] > 90 s` thì phát `{"t":"node","zone":z,"online":false}` (chỉ phát khi trạng thái đổi). Mỗi 60 s phát `{"t":"stat",...}`: số gói nhận/mất/trùng theo zone, tính từ `seq` uplink. |
 | `beaconTimer` (60 s) | Gửi `BEACON` (kèm epoch nếu server đã đồng bộ giờ) tới cả 3 nút, **chỉ khi server còn sống** (nhận dòng JSON từ server trong 3 phút gần nhất). Laptop tắt nhưng gateway vẫn có nguồn thì nút vẫn chuyển được sang FALLBACK. LED GPIO2 sáng khi server còn sống. |
 
 Gateway **không đệm dữ liệu** khi laptop mất kết nối: dữ liệu trong khoảng đó bị bỏ qua.
@@ -296,6 +296,7 @@ USB-Serial **115200 8N1**, mỗi bản tin là **1 dòng JSON** kết thúc bằ
 {"t":"pump","zone":2,"on":0,"src":"cmd","cmd_seq":7,"dur":15}
 {"t":"ack","zone":2,"seq":7,"status":"ok"}          // ok | rej_cooldown | rej_busy | rej_invalid | timeout
 {"t":"node","zone":3,"online":false}
+{"t":"stat","zone":1,"rx":120,"lost":2,"dup":1,"bad":0}  // mỗi 60 s, cộng dồn từ lúc gateway khởi động
 ```
 
 ### 6.2 Server → Gateway

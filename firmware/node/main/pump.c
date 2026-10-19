@@ -62,11 +62,12 @@ static void pump_task(void *arg)
         xSemaphoreTake(mtx, portMAX_DELAY);
         if (running) {
             uint32_t elapsed = now - run_start_ms;
-            if (elapsed >= PUMP_MAX_S * 1000UL) {
-                ev = turn_off_locked(SRC_SAFETY_STOP, now);
-                fire = true;
-            } else if (elapsed >= run_target_s * 1000UL) {
+            // Kiểm tra mục tiêu trước: lệnh dur = PUMP_MAX_S kết thúc bình thường, không tính là safety
+            if (elapsed >= run_target_s * 1000UL) {
                 ev = turn_off_locked(run_source, now);
+                fire = true;
+            } else if (elapsed >= PUMP_MAX_S * 1000UL) {
+                ev = turn_off_locked(SRC_SAFETY_STOP, now);
                 fire = true;
             }
         } else {
