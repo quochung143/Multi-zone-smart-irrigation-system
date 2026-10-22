@@ -8,6 +8,7 @@ typedef struct {
     float    temp_c;    // NAN nếu chưa đọc được
     float    hum_pct;   // NAN nếu chưa đọc được
     uint8_t  flags;     // FLAG_AIR_ERR | FLAG_ADC_ERR
+    int      air_err;   // esp_err_t của lần đọc DHT22 gần nhất (ESP_OK = 0)
     bool     ready;     // đã có ít nhất 1 mẫu độ ẩm đất
 } sensor_data_t;
 

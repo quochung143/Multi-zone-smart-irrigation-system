@@ -49,11 +49,27 @@ static const char *ack_name(uint8_t s)
     }
 }
 
+static portMUX_TYPE ack_mux = portMUX_INITIALIZER_UNLOCKED;
+static last_ack_t last_ack;
+
 static void emit_ack(uint8_t zone, uint16_t seq, const char *status)
 {
     char line[80];
     snprintf(line, sizeof(line), "{\"t\":\"ack\",\"zone\":%u,\"seq\":%u,\"status\":\"%s\"}", zone, seq, status);
     serial_out(line);
+
+    last_ack_t a = {.valid = true, .zone = zone, .seq = seq, .at_ms = now_ms()};
+    strlcpy(a.status, status, sizeof(a.status));
+    taskENTER_CRITICAL(&ack_mux);
+    last_ack = a;
+    taskEXIT_CRITICAL(&ack_mux);
+}
+
+void cmd_last_ack(last_ack_t *out)
+{
+    taskENTER_CRITICAL(&ack_mux);
+    *out = last_ack;
+    taskEXIT_CRITICAL(&ack_mux);
 }
 
 static int json_int(const cJSON *obj, const char *key, int def)
@@ -80,7 +96,10 @@ static bool build_command(const cJSON *doc, const char *t, out_cmd_t *out)
     if (strcmp(t, "cmd") == 0) {
         int dur = json_int(doc, "dur", 0);
         if (dur <= 0 || dur > 0xFFFF) return false;
-        msg_cmd_water_t m = {{MSG_CMD_WATER, out->zone, out->seq}, (uint16_t)dur};
+        // "force": 1 hoặc true = người dùng tưới thủ công, nút bỏ qua cooldown
+        const cJSON *f = cJSON_GetObjectItemCaseSensitive(doc, "force");
+        bool force = cJSON_IsTrue(f) || (cJSON_IsNumber(f) && f->valueint != 0);
+        msg_cmd_water_t m = {{MSG_CMD_WATER, out->zone, out->seq}, (uint16_t)dur, force ? CMD_FLAG_FORCE : 0};
         memcpy(out->data, &m, sizeof(m));
         out->len = sizeof(m);
     } else if (strcmp(t, "stop") == 0) {
@@ -108,7 +127,7 @@ static void handle_line(const char *line)
 
     cJSON *doc = cJSON_Parse(line);
     if (!doc) {
-        serial_out("# json loi");
+        serial_out_always("# json loi");  // dòng lỗi không làm mới heartbeat nhưng vẫn phải báo lại
         return;
     }
     last_server_ms = now_ms();

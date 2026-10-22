@@ -194,7 +194,7 @@ Lệnh bị từ chối (đang cooldown / đang chạy) → ACK status = REJECTE
 | `livenessTask` (1 s) | Nếu `now - last_seen[zone] > 90 s` thì phát `{"t":"node","zone":z,"online":false}` (chỉ phát khi trạng thái đổi). Mỗi 60 s phát `{"t":"stat",...}`: số gói nhận/mất/trùng theo zone, tính từ `seq` uplink. |
 | `beaconTimer` (60 s) | Gửi `BEACON` (kèm epoch nếu server đã đồng bộ giờ) tới cả 3 nút, **chỉ khi server còn sống** (nhận dòng JSON từ server trong 3 phút gần nhất). Laptop tắt nhưng gateway vẫn có nguồn thì nút vẫn chuyển được sang FALLBACK. LED GPIO2 sáng khi server còn sống. |
 
-Gateway **không đệm dữ liệu** khi laptop mất kết nối: dữ liệu trong khoảng đó bị bỏ qua.
+Gateway **không đệm dữ liệu** khi laptop mất kết nối: dữ liệu trong khoảng đó bị bỏ qua. Gateway cũng **chỉ in lên Serial khi server còn sống** (trừ `hello` và lỗi khởi động): không ai mở cổng thì chip CP210x không giữ dữ liệu cũ, tránh driver phát lại hàng loạt khi cổng được mở (đã gây BSOD `0xB8` trên Windows). Khi server kết nối lại, gateway báo lại `node` của các zone đã thấy. Xem bằng `idf.py monitor` thì gõ `{"t":"ping"}` để bật đầu ra.
 
 ---
 
@@ -239,7 +239,7 @@ typedef struct {
 typedef struct {
   MsgHeader h;
   uint8_t  on;         // 1=bật, 0=tắt
-  uint8_t  source;     // 0=CMD, 1=FALLBACK, 2=SAFETY_STOP
+  uint8_t  source;     // 0=CMD, 1=FALLBACK, 2=SAFETY_STOP, 3=FORCE
   uint16_t cmd_seq;    // seq lệnh gây ra (0 nếu fallback)
   uint16_t duration_s; // thời lượng đã chạy (khi on=0)
 } MsgPumpEvent;
@@ -253,6 +253,7 @@ typedef struct {
 typedef struct {
   MsgHeader h;
   uint16_t duration_s; // 1..PUMP_MAX_S
+  uint8_t  flags;      // bit0 FORCE: bỏ qua cooldown (tưới thủ công)
 } MsgCmdWater;
 
 typedef struct { MsgHeader h; } MsgCmdStop;
@@ -303,6 +304,7 @@ USB-Serial **115200 8N1**, mỗi bản tin là **1 dòng JSON** kết thúc bằ
 
 ```json
 {"t":"cmd","zone":2,"seq":7,"dur":15}
+{"t":"cmd","zone":2,"seq":8,"dur":10,"force":1}   // tưới thủ công: bỏ qua cooldown, pump event có src "force"
 {"t":"stop","zone":2,"seq":8}
 {"t":"cfg","zone":1,"seq":9,"low":35.0,"max":30,"fb":10}
 {"t":"time","epoch":1794000000}     // gửi mỗi 60 s: đồng bộ giờ + heartbeat của server

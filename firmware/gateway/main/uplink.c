@@ -31,6 +31,13 @@ typedef struct {
 } zone_stat_t;
 static zone_stat_t stats[NUM_ZONES];
 
+// Dữ liệu mới nhất cho màn hình (display_task đọc qua uplink_zone_view)
+static portMUX_TYPE view_mux = portMUX_INITIALIZER_UNLOCKED;
+static msg_telemetry_t last_tel[NUM_ZONES];
+static int8_t last_rssi[NUM_ZONES];
+static bool has_tel[NUM_ZONES];
+static bool pump_on[NUM_ZONES];
+
 static void on_recv(const esp_now_recv_info_t *info, const uint8_t *data, int len)
 {
     int zone = zone_from_mac(info->src_addr);
@@ -98,12 +105,22 @@ static void handle_packet(const rx_packet_t *pkt)
         msg_telemetry_t m;
         memcpy(&m, pkt->data, sizeof(m));
         emit_telemetry(pkt->zone, &m, pkt->rssi);
+        taskENTER_CRITICAL(&view_mux);
+        last_tel[pkt->zone - 1] = m;
+        last_rssi[pkt->zone - 1] = pkt->rssi;
+        has_tel[pkt->zone - 1] = true;
+        pump_on[pkt->zone - 1] = m.pump_on;
+        taskEXIT_CRITICAL(&view_mux);
         break;
     }
     case MSG_PUMP_EVENT: {
         msg_pump_event_t m;
         memcpy(&m, pkt->data, sizeof(m));
         emit_pump_event(pkt->zone, &m);
+        taskENTER_CRITICAL(&view_mux);
+        pump_on[pkt->zone - 1] = m.on;
+        last_rssi[pkt->zone - 1] = pkt->rssi;
+        taskEXIT_CRITICAL(&view_mux);
         break;
     }
     case MSG_ACK: {
@@ -155,15 +172,19 @@ static void liveness_task(void *arg)
 {
     esp_task_wdt_add(NULL);
     bool reported_online[NUM_ZONES] = {false};
+    bool was_alive = false;
     uint32_t last_beacon_ms = 0;
     uint32_t last_stat_ms = now_ms();
 
     for (;;) {
         esp_task_wdt_reset();
         uint32_t now = now_ms();
+        bool alive = server_alive();
 
         for (int i = 0; i < NUM_ZONES; i++) {
             bool online = seen[i] && (now - last_seen_ms[i] < NODE_OFFLINE_MS);
+            // Server vừa kết nối lại: lúc im lặng không in được "node", báo lại trạng thái hiện tại
+            if (alive && !was_alive && seen[i]) reported_online[i] = !online;
             if (online != reported_online[i]) {
                 reported_online[i] = online;
                 char line[48];
@@ -173,8 +194,9 @@ static void liveness_task(void *arg)
             }
         }
 
+        was_alive = alive;
+
         // Chỉ beacon khi server còn sống: laptop tắt thì nút tự chuyển sang FALLBACK
-        bool alive = server_alive();
         gpio_set_level(PIN_LED, alive);
         if (alive && now - last_beacon_ms >= BEACON_PERIOD_MS) {
             last_beacon_ms = now;
@@ -187,6 +209,26 @@ static void liveness_task(void *arg)
 
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
+}
+
+void uplink_zone_view(int zone, zone_view_t *out)
+{
+    static const uint8_t unset[6] = {0};
+    int i = zone - 1;
+    uint32_t now = now_ms();
+    memset(out, 0, sizeof(*out));
+    if (i < 0 || i >= NUM_ZONES) return;
+    out->configured = memcmp(NODE_MAC[i], unset, 6) != 0;
+    out->online = seen[i] && (now - last_seen_ms[i] < NODE_OFFLINE_MS);
+    out->age_s = seen[i] ? (now - last_seen_ms[i]) / 1000 : 0;
+    out->rx = stats[i].rx;
+    out->lost = stats[i].lost;
+    taskENTER_CRITICAL(&view_mux);
+    out->has_tel = has_tel[i];
+    out->tel = last_tel[i];
+    out->rssi = last_rssi[i];
+    out->pump_on = pump_on[i];
+    taskEXIT_CRITICAL(&view_mux);
 }
 
 void uplink_init(void)

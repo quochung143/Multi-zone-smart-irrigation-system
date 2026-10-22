@@ -21,12 +21,17 @@
 
 static SemaphoreHandle_t serial_mtx;
 
-void serial_out(const char *line)
+void serial_out_always(const char *line)
 {
     xSemaphoreTake(serial_mtx, portMAX_DELAY);
     uart_write_bytes(SERVER_UART, line, strlen(line));
     uart_write_bytes(SERVER_UART, "\n", 1);
     xSemaphoreGive(serial_mtx);
+}
+
+void serial_out(const char *line)
+{
+    if (server_alive()) serial_out_always(line);
 }
 
 int zone_from_mac(const uint8_t *mac)
@@ -61,10 +66,12 @@ static void espnow_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
     ESP_ERROR_CHECK(esp_now_init());
 
+    static const uint8_t unset[6] = {0};
     for (int i = 0; i < NUM_ZONES; i++) {
+        if (memcmp(NODE_MAC[i], unset, 6) == 0) continue;  // zone chưa điền MAC (đang thử ít nút)
         esp_now_peer_info_t peer = {.channel = ESPNOW_CHANNEL, .ifidx = WIFI_IF_STA, .encrypt = false};
         memcpy(peer.peer_addr, NODE_MAC[i], 6);
-        if (esp_now_add_peer(&peer) != ESP_OK) serial_out("# them peer loi (MAC trong app_config.h?)");
+        if (esp_now_add_peer(&peer) != ESP_OK) serial_out_always("# them peer loi (MAC trong app_config.h?)");
     }
 }
 
@@ -86,11 +93,12 @@ void app_main(void)
     cmd_init();
     uplink_start_tasks();
     cmd_start_tasks();
+    display_start();
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     char line[96];
     snprintf(line, sizeof(line), "{\"t\":\"hello\",\"fw\":\"gw-1.0\",\"mac\":\"%02X:%02X:%02X:%02X:%02X:%02X\"}",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    serial_out(line);
+    serial_out_always(line);
 }

@@ -19,13 +19,17 @@ enum {
 };
 
 typedef enum { MODE_NORMAL = 0, MODE_FALLBACK = 1 } node_mode_t;
-typedef enum { SRC_CMD = 0, SRC_FALLBACK = 1, SRC_SAFETY_STOP = 2 } pump_source_t;
+// SRC_FORCE: lệnh tưới có cờ CMD_FLAG_FORCE (người dùng bấm tưới thủ công), bỏ qua cooldown
+typedef enum { SRC_CMD = 0, SRC_FALLBACK = 1, SRC_SAFETY_STOP = 2, SRC_FORCE = 3 } pump_source_t;
 typedef enum { ACK_OK = 0, ACK_REJ_COOLDOWN = 1, ACK_REJ_BUSY = 2, ACK_REJ_INVALID = 3 } ack_status_t;
 
 // Bit trong msg_telemetry_t.flags
 #define FLAG_AIR_ERR   0x01  // lỗi DHT22 (nhiệt độ/độ ẩm không khí)
 #define FLAG_ADC_ERR   0x02
 #define FLAG_COOLDOWN  0x04
+
+// Bit trong msg_cmd_water_t.flags
+#define CMD_FLAG_FORCE 0x01  // bỏ qua cooldown; vẫn giữ giới hạn pump_max_s và REJ_BUSY
 
 typedef struct __attribute__((packed)) {
     uint8_t  type;       // MSG_*
@@ -62,6 +66,7 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     msg_header_t h;
     uint16_t duration_s; // 1..pump_max_s
+    uint8_t  flags;      // CMD_FLAG_*
 } msg_cmd_water_t;
 
 typedef struct __attribute__((packed)) {
@@ -84,7 +89,7 @@ static_assert(sizeof(msg_header_t)     == 4,  "msg_header_t");
 static_assert(sizeof(msg_telemetry_t)  == 19, "msg_telemetry_t");
 static_assert(sizeof(msg_pump_event_t) == 10, "msg_pump_event_t");
 static_assert(sizeof(msg_ack_t)        == 7,  "msg_ack_t");
-static_assert(sizeof(msg_cmd_water_t)  == 6,  "msg_cmd_water_t");
+static_assert(sizeof(msg_cmd_water_t)  == 7,  "msg_cmd_water_t");
 static_assert(sizeof(msg_cmd_stop_t)   == 4,  "msg_cmd_stop_t");
 static_assert(sizeof(msg_config_t)     == 10, "msg_config_t");
 static_assert(sizeof(msg_beacon_t)     == 8,  "msg_beacon_t");
@@ -116,5 +121,11 @@ static inline bool msg_validate(const uint8_t *data, size_t len)
 
 static inline const char *pump_source_name(uint8_t s)
 {
-    return s == SRC_CMD ? "cmd" : s == SRC_FALLBACK ? "fallback" : s == SRC_SAFETY_STOP ? "safety" : "?";
+    switch (s) {
+    case SRC_CMD:         return "cmd";
+    case SRC_FALLBACK:    return "fallback";
+    case SRC_SAFETY_STOP: return "safety";
+    case SRC_FORCE:       return "force";
+    default:              return "?";
+    }
 }

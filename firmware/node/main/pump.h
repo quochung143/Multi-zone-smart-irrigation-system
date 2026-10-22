@@ -26,6 +26,7 @@ void pump_start_task(void);
 void pump_set_event_cb(pump_event_cb_t cb);  // gọi từ ngữ cảnh task, không gọi trong ISR
 
 // Bật bơm duration_s giây; trả về trạng thái để dùng làm ACK.
+// SRC_FORCE bỏ qua cooldown (vẫn chặn khi đang chạy và khi vượt pump_max_s); tưới xong cooldown tính lại từ đầu.
 ack_status_t pump_start(uint16_t duration_s, pump_source_t source, uint16_t cmd_seq);
 bool pump_stop(void);  // false nếu bơm đang không chạy
 pump_status_t pump_status(void);

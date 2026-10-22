@@ -10,9 +10,9 @@
 #define NUM_ZONES             3
 
 // TODO: điền MAC thật sau khi đọc từ từng ESP32 (lệnh `mac` trên nút, dòng `hello` của gateway)
-static const uint8_t GATEWAY_MAC[6]         = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+static const uint8_t GATEWAY_MAC[6]         = {0x70, 0x4B, 0xCA, 0x6E, 0xBC, 0x68};
 static const uint8_t NODE_MAC[NUM_ZONES][6] = {
-    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},  // Zone 1
+    {0x8C, 0x94, 0xDF, 0x4B, 0xEE, 0x00},  // Zone 1
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},  // Zone 2
     {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},  // Zone 3
 };
@@ -24,6 +24,24 @@ static const uint8_t NODE_MAC[NUM_ZONES][6] = {
 #define PIN_LED               2
 #define RELAY_ON_LEVEL        0
 #define RELAY_OFF_LEVEL       1
+
+// ===== Màn hình TFT SPI 240x320 (gateway) =====
+#define LCD_ENABLED           1              // 0 = gateway không có màn hình
+#define LCD_CTRL_ILI9341      1
+#define LCD_CTRL_ST7789       2
+#define LCD_CONTROLLER        LCD_CTRL_ILI9341  // đổi thành LCD_CTRL_ST7789 nếu màn dùng chip ST7789
+#define LCD_PIN_SCLK          18             // SCK / CLK
+#define LCD_PIN_MOSI          23             // SDI / MOSI / SDA
+#define LCD_PIN_CS            22
+#define LCD_PIN_DC            21             // DC / RS / A0
+#define LCD_PIN_RST           4              // RESET
+#define LCD_PIN_BL            16             // LED / BL (đèn nền), -1 nếu nối thẳng 3V3
+#define LCD_SPI_HZ            (20 * 1000 * 1000)
+#define LCD_SWAP_RB           0              // đỏ và xanh dương bị đảo màu thì đặt 1
+#define LCD_MIRROR            1              // chữ bị lật như soi gương thì đổi 0 <-> 1
+#define LCD_INVERT            1              // màu bị âm bản (nền trắng) thì đổi 0 <-> 1
+#define LCD_FLIP              0              // hình bị lộn ngược 180° thì đặt 1
+#define LCD_REFRESH_MS        1000
 
 // ===== Thời gian =====
 #define TELEMETRY_PERIOD_MS   30000

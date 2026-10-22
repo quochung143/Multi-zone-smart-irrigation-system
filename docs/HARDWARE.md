@@ -177,3 +177,24 @@ Chạy server giả: `pip install pyserial`, sau đó `python server/tools/gw_te
 | 8 | Thoát `gw_test.py` (server "chết"), chờ > 3 phút + 5 phút | LED gateway tắt; trên console nút: `mode -> FALLBACK`; `tel` có `"mode":"fallback"`; đất khô hơn `low` thì nút tự tưới (`src=fallback`) |
 | 9 | Chạy lại `gw_test.py` | Trong ≤ 60 s nút về `mode -> NORMAL` |
 | 10 | Tầm truyền: đặt nút ở 5/10/20/30 m | Ghi `rssi` và tỉ lệ mất gói (đếm `seq` bị nhảy trong `tel`) |
+
+## 8. Gateway — màn hình TFT SPI 240x320
+
+Gateway hiển thị trạng thái server, giờ, 3 zone (online, độ ẩm đất, nhiệt độ, độ ẩm không khí, bơm, chế độ, RSSI, mất gói) và kết quả lệnh gần nhất. Code: `firmware/gateway/main/lcd.c`, `display.c`; chân và chip cấu hình trong `app_config.h` (`LCD_*`).
+
+| Chân màn hình | Tên khác trên module | ESP32 gateway |
+|---|---|---|
+| VCC | | 3V3 |
+| GND | | GND |
+| CS | | GPIO22 |
+| RESET | RST | GPIO4 |
+| DC | RS, A0 | GPIO21 |
+| SDI (MOSI) | SDA, DIN | GPIO23 |
+| SCK | CLK, SCL | GPIO18 |
+| LED | BL | GPIO16 (hoặc nối thẳng 3V3) |
+| SDO (MISO) | | Để trống |
+| T_CLK, T_CS, T_DIN, T_DO, T_IRQ | Cảm ứng | Để trống |
+
+- Mặc định chip **ILI9341**. Màn dùng **ST7789** thì đặt `LCD_CONTROLLER LCD_CTRL_ST7789`.
+- Đỏ/xanh dương bị đảo: `LCD_SWAP_RB 1`. Chữ bị lật như soi gương: `LCD_MIRROR 1`. Hình lộn ngược: `LCD_FLIP 1`.
+- Module có jumper `J1` (bỏ qua LDO) thì để hở khi cấp 3V3 vào chân VCC.

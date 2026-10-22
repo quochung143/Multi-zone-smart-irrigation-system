@@ -93,7 +93,8 @@ Lệnh trong công cụ: `water`, `stop`, `cfg`, `stats`, `selftest <zone>`, `hb
 
 | # | Bước | Mong đợi | Kết quả Z1 | Z2 | Z3 |
 |---|---|---|---|---|---|
-| 1 | `selftest <z>` (xóa cooldown trên nút trước) | `7/7 PASS` | | | |
+| 1 | `selftest <z>` (xóa cooldown trên nút trước) | `10/10 PASS` | | | |
+| 1b | Ngay sau selftest (đang `NGHI`): `water <z> 3` rồi `water <z> 3 force` | Lệnh 1 `rej_cooldown`; lệnh 2 `ok`, `pump src=force` | | | |
 | 2 | `water <z> 5` | `ack ok`, rồi `pump on=1`, sau 5 s `pump on=0 dur=5` | | | |
 | 3 | `raw {"t":"cmd","zone":1,"seq":<seq vừa dùng>,"dur":5}` (gửi lại seq cũ) | Trả lại ACK cũ, **bơm không chạy lại** | | | |
 | 4 | Rút nguồn nút, `water <z> 5` | `ack timeout` sau ~1 s (3 lần × 300 ms) | | | |

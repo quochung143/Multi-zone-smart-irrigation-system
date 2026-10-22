@@ -108,7 +108,7 @@ static ack_status_t execute_command(const rx_item_t *item)
     case MSG_CMD_WATER: {
         msg_cmd_water_t cmd;
         memcpy(&cmd, item->data, sizeof(cmd));
-        return pump_start(cmd.duration_s, SRC_CMD, cmd.h.seq);
+        return pump_start(cmd.duration_s, (cmd.flags & CMD_FLAG_FORCE) ? SRC_FORCE : SRC_CMD, cmd.h.seq);
     }
     case MSG_CMD_STOP:
         pump_stop();

@@ -2,7 +2,7 @@
 
 Mô phỏng theo firmware (gateway/main/cmd.c, node/main/pump.c, comm.c):
 - Kiểm tra lệnh như gateway: "# json loi", "# lenh khong hop le".
-- Nút: rej_invalid (dur > pump_max_s), rej_busy, rej_cooldown (10 phút), lệnh trùng seq -> ACK cũ.
+- Nút: rej_invalid (dur > pump_max_s), rej_busy, rej_cooldown (10 phút, "force" bỏ qua), lệnh trùng seq -> ACK cũ.
 - tel mỗi TEL_PERIOD_S (rút ngắn so với 30 s thật), độ ẩm giảm dần, tăng khi bơm.
 - stat mỗi 60 s, node online khi có gói đầu tiên.
 - Zone nằm trong --offline không trả lời: lệnh tới zone đó -> ack "timeout" sau ~0.9 s.
@@ -33,7 +33,7 @@ class Node:
         self.soil = 45.0 + zone * 5
         self.seq = 0
         self.pump_max = PUMP_MAX_S
-        self.pump: tuple[float, int, int] | None = None  # (start, dur, cmd_seq)
+        self.pump: tuple[float, int, int, str] | None = None  # (start, dur, cmd_seq, src)
         self.last_end: float | None = None
         self.last_cmd: tuple[int, str] | None = None  # (seq, status)
         self.rx = 0
@@ -74,11 +74,11 @@ class FakeGateway:
                 if z in self.offline:
                     continue
                 if n.pump:
-                    start, dur, cseq = n.pump
+                    start, dur, cseq, src = n.pump
                     n.soil = min(95.0, n.soil + 0.15)
                     if now - start >= dur:
                         n.pump, n.last_end = None, now
-                        self._uplink(n, {"t": "pump", "zone": z, "on": 0, "src": "cmd", "cmd_seq": cseq,
+                        self._uplink(n, {"t": "pump", "zone": z, "on": 0, "src": src, "cmd_seq": cseq,
                                          "dur": round(now - start)})
                 else:
                     n.soil = max(5.0, n.soil - 0.002)
@@ -148,19 +148,20 @@ class FakeGateway:
         elif m["t"] == "stop":
             status = "ok"
             if n.pump:
-                n.pump = (n.pump[0], 0, n.pump[2])  # _tick sẽ tắt và phát pump on=0
+                n.pump = (n.pump[0], 0, n.pump[2], n.pump[3])  # _tick sẽ tắt và phát pump on=0
         else:
             dur = m["dur"]
+            src = "force" if m.get("force") else "cmd"
             if dur > n.pump_max:
                 status = "rej_invalid"
             elif n.pump:
                 status = "rej_busy"
-            elif n.last_end and now - n.last_end < COOLDOWN_S:
+            elif src == "cmd" and n.last_end and now - n.last_end < COOLDOWN_S:
                 status = "rej_cooldown"
             else:
                 status = "ok"
-                n.pump = (now, dur, seq)
-                pump_on = {"t": "pump", "zone": zone, "on": 1, "src": "cmd", "cmd_seq": seq, "dur": 0}
+                n.pump = (now, dur, seq, src)
+                pump_on = {"t": "pump", "zone": zone, "on": 1, "src": src, "cmd_seq": seq, "dur": 0}
         n.last_cmd = (seq, status)
         self._uplink(n, {"t": "ack", "zone": zone, "seq": seq, "status": status})
         if pump_on:
@@ -171,6 +172,14 @@ class FakeGateway:
             return self.out.get(timeout=1)
         except queue.Empty:
             return b""
+
+    dtr = rts = False
+
+    def open(self) -> None:
+        pass
+
+    def reset_input_buffer(self) -> None:
+        pass
 
     def close(self) -> None:
         pass

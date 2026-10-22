@@ -112,7 +112,7 @@ ack_status_t pump_start(uint16_t duration_s, pump_source_t source, uint16_t cmd_
         xSemaphoreGive(mtx);
         return ACK_REJ_BUSY;
     }
-    if (cooldown_left(now) > 0) {
+    if (source != SRC_FORCE && cooldown_left(now) > 0) {
         xSemaphoreGive(mtx);
         return ACK_REJ_COOLDOWN;
     }

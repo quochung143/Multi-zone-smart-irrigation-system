@@ -9,6 +9,7 @@
 #include "app_config.h"
 #include "comm.h"
 #include "esp_console.h"
+#include "esp_err.h"
 #include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,7 +17,10 @@
 #include "sensor.h"
 #include "settings.h"
 
-static volatile bool streaming = false;
+#define STREAM_DEFAULT_S 30
+
+// 0 = tắt. Tự tắt để không phải gõ "stream off" trong lúc dữ liệu chen vào dòng nhập.
+static volatile uint32_t stream_until_ms = 0;
 
 static const char *ack_name(ack_status_t s)
 {
@@ -48,7 +52,9 @@ static int cmd_status(int argc, char **argv)
     printf("Zone %u%s | uptime %lus\n", zone, zone ? "" : " (CHUA DAT)", (unsigned long)(now_ms() / 1000));
     printf("Soil: raw=%u pct=%.1f%% (cal dry=%u wet=%u)%s\n", s.soil_raw, s.soil_pct, c.dry, c.wet,
            (s.flags & FLAG_ADC_ERR) ? " [ADC ERR]" : "");
-    printf("DHT22: temp=%.1fC hum=%.1f%%%s\n", s.temp_c, s.hum_pct, (s.flags & FLAG_AIR_ERR) ? " [DHT ERR]" : "");
+    printf("DHT22: temp=%.1fC hum=%.1f%%", s.temp_c, s.hum_pct);
+    if (s.flags & FLAG_AIR_ERR) printf(" [DHT ERR: %s]", esp_err_to_name(s.air_err));
+    printf("\n");
     printf("Pump: %s", p.on ? "ON" : "OFF");
     if (p.on) printf(" src=%s seq=%u %lu/%us", pump_source_name(p.source), p.cmd_seq,
                      (unsigned long)(p.elapsed_ms / 1000), p.target_s);
@@ -68,8 +74,15 @@ static int cmd_status(int argc, char **argv)
 
 static int cmd_stream(int argc, char **argv)
 {
-    if (argc != 2) return printf("Cu phap: stream on|off\n"), 1;
-    streaming = strcmp(argv[1], "on") == 0;
+    if (argc != 2) return printf("Cu phap: stream on|off|<giay>\n"), 1;
+    if (strcmp(argv[1], "off") == 0) {
+        stream_until_ms = 0;
+        return 0;
+    }
+    int secs = strcmp(argv[1], "on") == 0 ? STREAM_DEFAULT_S : atoi(argv[1]);
+    if (secs <= 0) return printf("Cu phap: stream on|off|<giay>\n"), 1;
+    stream_until_ms = now_ms() + secs * 1000UL;
+    printf("In du lieu %d s roi tu tat ('stream off' de dung som)\n", secs);
     return 0;
 }
 
@@ -109,8 +122,9 @@ static int cmd_cal(int argc, char **argv)
 
 static int cmd_water(int argc, char **argv)
 {
-    if (argc != 2) return printf("Cu phap: water <giay>\n"), 1;
-    printf("water: %s\n", ack_name(pump_start((uint16_t)atoi(argv[1]), SRC_CMD, 0)));
+    bool force = argc == 3 && strcmp(argv[2], "force") == 0;
+    if (argc != 2 && !force) return printf("Cu phap: water <giay> [force]\n"), 1;
+    printf("water: %s\n", ack_name(pump_start((uint16_t)atoi(argv[1]), force ? SRC_FORCE : SRC_CMD, 0)));
     return 0;
 }
 
@@ -143,7 +157,13 @@ static int cmd_set(int argc, char **argv)
 static void stream_task(void *arg)
 {
     for (;;) {
-        if (streaming) print_sensor_line();
+        uint32_t until = stream_until_ms;
+        if (until && (int32_t)(until - now_ms()) > 0) {
+            print_sensor_line();
+        } else if (until) {
+            stream_until_ms = 0;
+            printf("stream: da tat\n");
+        }
         vTaskDelay(pdMS_TO_TICKS(SENSOR_PERIOD_MS));
     }
 }
@@ -164,11 +184,11 @@ void console_start(void)
 
     esp_console_register_help_command();
     register_cmd("status", "Trang thai cam bien, bom, goi telemetry (hex)", cmd_status);
-    register_cmd("stream", "stream on|off: in du lieu cam bien moi giay", cmd_stream);
+    register_cmd("stream", "stream on|off|<giay>: in du lieu cam bien moi giay, tu tat sau 30 s", cmd_stream);
     register_cmd("mac", "Dia chi MAC (dien vao app_config.h)", cmd_mac);
     register_cmd("zone", "zone [1-3]: xem/dat Zone ID (luu NVS)", cmd_zone);
     register_cmd("cal", "cal [dry|wet|set <dry> <wet>]: hieu chuan do am dat", cmd_cal);
-    register_cmd("water", "water <giay>: bat bom", cmd_water);
+    register_cmd("water", "water <giay> [force]: bat bom (force = bo qua thoi gian nghi)", cmd_water);
     register_cmd("stop", "Tat bom", cmd_stop);
     register_cmd("cooldown_clear", "Xoa cooldown (chi de thu nghiem)", cmd_cooldown);
     register_cmd("set", "set low|max|fb <gia tri>", cmd_set);

@@ -3,12 +3,12 @@
 - In mọi dòng gateway gửi lên (thêm giờ nhận).
 - Gửi {"t":"time"} mỗi 60 s để gateway coi server còn sống (gateway mới phát beacon).
 - Gõ lệnh để gửi xuống nút:
-    water <zone> <giây>
+    water <zone> <giây> [force]   force = tưới thủ công, bỏ qua thời gian nghỉ (cooldown)
     stop <zone>
     cfg <zone> <low%> <max_s> <fb_s>
     raw <json>
     stats                 tổng hợp theo zone: số gói, mất gói, RSSI, online, ACK
-    selftest <zone>       kiểm tra ACK ok / rej_invalid / rej_busy / rej_cooldown / stop
+    selftest <zone>       kiểm tra ACK ok / rej_invalid / rej_busy / rej_cooldown / force / stop
     hb on|off             bật/tắt heartbeat (tắt để thử nút chuyển FALLBACK)
     quiet on|off          ẩn/hiện dòng tel
     quit
@@ -25,6 +25,7 @@ import serial
 
 HEARTBEAT_S = 60
 ACK_WAIT_S = 3.0  # gateway: 3 lần × 300 ms, cộng độ trễ Serial
+REPLAY_LIMIT = 5  # số lần một dòng lặp lại liên tiếp thì coi là driver phát lại bộ đệm
 
 
 class ZoneStats:
@@ -44,7 +45,14 @@ def main() -> None:
     ap.add_argument("--log", help="ghi mọi dòng JSON nhận được ra file .jsonl")
     args = ap.parse_args()
 
-    ser = serial.serial_for_url(args.port, baudrate=115200, timeout=1)
+    # Giữ DTR/RTS ở mức nghỉ trước khi mở để Windows không reset gateway (EN/IO0 nối qua DTR/RTS)
+    ser = serial.serial_for_url(args.port, baudrate=115200, timeout=1, do_not_open=True)
+    ser.dtr = False
+    ser.rts = False
+    ser.open()
+    # Bỏ dữ liệu cũ chip USB-UART còn giữ từ lúc chưa ai mở cổng (driver CP210x có thể phát lại nhiều lần)
+    time.sleep(0.2)
+    ser.reset_input_buffer()
     log = open(args.log, "a", encoding="utf-8") if args.log else None
     lock = threading.Lock()
     stop = threading.Event()
@@ -85,11 +93,20 @@ def main() -> None:
             cond.notify_all()
 
     def reader() -> None:
+        last_text, repeats = None, 0
         while not stop.is_set():
             raw = ser.readline()
             if not raw:
                 continue
             text = raw.decode(errors="replace").rstrip()
+            # Gateway không bao giờ in 2 dòng giống hệt liên tiếp nhiều lần: đó là driver phát lại bộ đệm cũ
+            repeats = repeats + 1 if text == last_text else 0
+            last_text = text
+            if repeats >= REPLAY_LIMIT:
+                if repeats == REPLAY_LIMIT:
+                    print("!! Cung mot dong lap lai lien tuc (driver USB phat lai du lieu cu): xoa bo dem, bo qua")
+                ser.reset_input_buffer()
+                continue
             msg = None
             if text.startswith("{"):
                 try:
@@ -141,7 +158,7 @@ def main() -> None:
             print(f"   [{'PASS' if ok else 'FAIL'}] {name}: {got} (mong doi {expect})")
             return ok
 
-        print(f"== selftest Zone {z} (bom se chay ~2 lan x 3 s)")
+        print(f"== selftest Zone {z} (bom se chay 2 lan)")
         check("cfg 35%/30s/10s", command({"t": "cfg", "zone": z, "low": 35.0, "max": 30, "fb": 10}, True), "ok")
         check("water 999 s", command({"t": "cmd", "zone": z, "dur": 999}, True), "rej_invalid")
         mark = len(pumps)
@@ -154,7 +171,13 @@ def main() -> None:
         off = wait_pump(z, 0, mark, 8)
         check("pump OFF sau ~3 s", off and off["dur"], 3)
         check("water trong cooldown", command({"t": "cmd", "zone": z, "dur": 3}, True), "rej_cooldown")
-        check("stop", command({"t": "stop", "zone": z}, True), "ok")
+        mark = len(pumps)
+        check("water force trong cooldown", command({"t": "cmd", "zone": z, "dur": 5, "force": 1}, True), "ok")
+        on = wait_pump(z, 1, mark, 2)
+        check("pump ON src=force", on and on["src"], "force")
+        check("stop khi bom dang chay", command({"t": "stop", "zone": z}, True), "ok")
+        off = wait_pump(z, 0, mark, 2)
+        check("pump OFF sau stop", off is not None, True)
         passed = sum(ok for _, ok, _ in results)
         print(f"== Ket qua: {passed}/{len(results)} PASS. Nut con cooldown 10 phut ('cooldown_clear' de xoa).")
 
@@ -181,7 +204,7 @@ def main() -> None:
     threading.Thread(target=reader, daemon=True).start()
     threading.Thread(target=heartbeat, daemon=True).start()
 
-    usage = ("Lenh: water <z> <s> | stop <z> | cfg <z> <low> <max> <fb> | raw <json> | stats | "
+    usage = ("Lenh: water <z> <s> [force] | stop <z> | cfg <z> <low> <max> <fb> | raw <json> | stats | "
              "selftest <z> | hb on|off | quiet on|off | quit")
     print(usage)
     try:
@@ -198,7 +221,10 @@ def main() -> None:
                 if cmd == "quit":
                     break
                 if cmd == "water":
-                    command({"t": "cmd", "zone": int(parts[1]), "dur": int(parts[2])})
+                    obj = {"t": "cmd", "zone": int(parts[1]), "dur": int(parts[2])}
+                    if len(parts) > 3 and parts[3] == "force":
+                        obj["force"] = 1
+                    command(obj)
                 elif cmd == "stop":
                     command({"t": "stop", "zone": int(parts[1])})
                 elif cmd == "cfg":

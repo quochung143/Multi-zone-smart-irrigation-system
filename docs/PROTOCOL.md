@@ -55,14 +55,17 @@ Ví dụ: Zone 1, seq 120, raw 2345, độ ẩm đất 43.2 %, 28.41 °C, 71.20 
 01 01 78 00 | 29 09 | B0 01 | 19 0B | D0 1B | 00 | 00 | 00 | 10 0E 00 00
 ```
 
-### 3.2 `CMD_WATER` — gói lệnh tưới (6 byte)
+### 3.2 `CMD_WATER` — gói lệnh tưới (7 byte)
 
 | Offset | Trường | Kiểu | Mô tả |
 |---|---|---|---|
 | 0–3 | header | | `type = 10`, `zone_id` = Zone đích, `seq` = seq lệnh do server cấp |
 | 4 | `duration_s` | uint16 | Thời lượng tưới, giây, 1..`pump_max_s` |
+| 6 | `flags` | uint8 | bit0 `CMD_FLAG_FORCE`: tưới thủ công, **bỏ qua cooldown** (vẫn chặn khi bơm đang chạy và khi vượt `pump_max_s`). Sự kiện bơm mang `source = FORCE` |
 
-Ví dụ: tưới Zone 2 trong 15 giây, seq 7: `0A 02 07 00 0F 00`
+Ví dụ: tưới Zone 2 trong 15 giây, seq 7: `0A 02 07 00 0F 00 00`; tưới cưỡng bức: `0A 02 07 00 0F 00 01`
+
+Chỉ người dùng bấm tưới thủ công mới dùng `force`; AI và tưới theo ngưỡng luôn gửi `flags = 0`. Tưới xong, cooldown tính lại từ đầu.
 
 ### 3.3 `ACK` — xác nhận lệnh (7 byte)
 
@@ -80,7 +83,7 @@ Ví dụ: Zone 2 chấp nhận lệnh seq 7: `03 02 51 00 07 00 00`
 |---|---|---|---|
 | 0–3 | header | | `type = 2` |
 | 4 | `on` | uint8 | 1 = vừa bật, 0 = vừa tắt |
-| 5 | `source` | uint8 | 0 CMD · 1 FALLBACK · 2 SAFETY_STOP |
+| 5 | `source` | uint8 | 0 CMD · 1 FALLBACK · 2 SAFETY_STOP · 3 FORCE |
 | 6 | `cmd_seq` | uint16 | Lệnh gây ra lần tưới này (0 nếu nút tự tưới fallback) |
 | 8 | `duration_s` | uint16 | Thời gian thực tế đã chạy (chỉ có nghĩa khi `on = 0`) |
 

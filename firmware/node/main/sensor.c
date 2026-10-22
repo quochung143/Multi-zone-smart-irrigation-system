@@ -107,11 +107,13 @@ static void sensor_task(void *arg)
         ema_raw = (ema_raw < 0) ? med : SOIL_EMA_ALPHA * med + (1.0f - SOIL_EMA_ALPHA) * ema_raw;
 
         bool air_read = false, air_ok = false;
+        esp_err_t air_err = ESP_OK;
         float t = NAN, h = NAN;
         if ((int32_t)(now_ms() - next_air_ms) >= 0) {
             next_air_ms = now_ms() + AIR_PERIOD_MS;
             air_read = true;
-            air_ok = dht_ready && dht22_read(&t, &h) == ESP_OK;
+            air_err = dht_ready ? dht22_read(&t, &h) : ESP_ERR_INVALID_STATE;
+            air_ok = air_err == ESP_OK;
         }
 
         xSemaphoreTake(mtx, portMAX_DELAY);
@@ -121,6 +123,7 @@ static void sensor_task(void *arg)
         if (raw_valid(med, cal)) data.flags &= ~FLAG_ADC_ERR;
         else data.flags |= FLAG_ADC_ERR;
         if (air_read) {
+            data.air_err = air_err;
             if (air_ok) {
                 data.temp_c = t;
                 data.hum_pct = h;
@@ -138,7 +141,7 @@ static void sensor_task(void *arg)
 void sensor_init(void)
 {
     mtx = xSemaphoreCreateMutex();
-    data = (sensor_data_t){0, 0.0f, NAN, NAN, 0, false};
+    data = (sensor_data_t){0, 0.0f, NAN, NAN, 0, ESP_OK, false};
 
     adc_oneshot_unit_init_cfg_t unit_cfg = {.unit_id = ADC_UNIT_1};
     ESP_ERROR_CHECK(adc_oneshot_new_unit(&unit_cfg, &adc));
