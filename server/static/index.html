@@ -4,92 +4,303 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tưới cây đa vùng</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="theme-color" content="#0a4225">
+  <!-- Inter tải không chặn: mạng hotspot không có internet thì dùng font hệ thống -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+  <!-- ?v=: đổi mỗi lần sửa css/js để Cloudflare và trình duyệt không dùng bản cache cũ -->
+  <link rel="stylesheet" href="style.css?v=2026-10-26g">
 </head>
 <body>
-  <header>
-    <h1>Tưới cây thông minh đa vùng</h1>
-    <div class="pills">
-      <span id="pill-ws" class="pill">Dashboard</span>
-      <span id="pill-mqtt" class="pill">MQTT</span>
-      <span id="pill-gw" class="pill">Gateway</span>
-      <span id="pill-model" class="pill">Model</span>
-      <form method="post" action="/logout" id="logout" hidden><button class="pill">Đăng xuất</button></form>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></symbol>
+    <symbol id="i-sprout" viewBox="0 0 24 24"><path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></symbol>
+    <symbol id="i-thermo" viewBox="0 0 24 24"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></symbol>
+    <symbol id="i-wind" viewBox="0 0 24 24"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></symbol>
+    <symbol id="i-nodes" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M10.8 7.2 6.2 16.8M13.2 7.2l4.6 9.6M7.5 19h9"/></symbol>
+    <symbol id="i-tap" viewBox="0 0 24 24"><path d="M4 9h9a3 3 0 0 1 3 3v1"/><path d="M4 5v8"/><path d="M8 9V6h3v3"/><path d="M16 17v.01M16 21v.01"/></symbol>
+    <symbol id="i-line" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+    <symbol id="i-bar" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M8 17V9M13 17V5M18 17v-3"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+    <symbol id="i-term" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-collapse" viewBox="0 0 24 24"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></symbol>
+  </svg>
+
+  <div class="shell" id="shell">
+  <aside class="sidebar" id="sidebar" aria-label="Thanh điều hướng">
+    <div class="side-brand">
+      <span class="logo"><svg class="ic"><use href="#i-leaf"/></svg><i></i></span>
+      <div class="lbl"><b>Smart Irrigation</b><span class="tag">Đa vùng</span></div>
+    </div>
+
+    <nav class="nav">
+      <a href="#/" data-route="overview" class="nav-item" title="Tổng quan"><svg class="ic"><use href="#i-grid"/></svg><span class="lbl">Tổng quan</span></a>
+      <a href="#/zones" data-route="zones" class="nav-item" title="Vùng tưới"><svg class="ic"><use href="#i-sprout"/></svg><span class="lbl">Vùng tưới</span></a>
+      <div class="nav-sub">
+        <a href="#/zones/1" data-zone="1"><i class="zdot" data-zdot="1"></i>Zone 1</a>
+        <a href="#/zones/2" data-zone="2"><i class="zdot" data-zdot="2"></i>Zone 2</a>
+        <a href="#/zones/3" data-zone="3"><i class="zdot" data-zdot="3"></i>Zone 3</a>
+      </div>
+      <a href="#/charts" data-route="charts" class="nav-item" title="Biểu đồ"><svg class="ic"><use href="#i-line"/></svg><span class="lbl">Biểu đồ</span></a>
+      <a href="#/commands" data-route="commands" class="nav-item" title="Nhật ký lệnh"><svg class="ic"><use href="#i-list"/></svg><span class="lbl">Nhật ký lệnh</span><span class="count" id="nav-pending" hidden></span></a>
+      <a href="#/events" data-route="events" class="nav-item" title="Sự kiện"><svg class="ic"><use href="#i-term"/></svg><span class="lbl">Sự kiện</span><span class="count" id="nav-events" hidden></span></a>
+    </nav>
+
+    <div class="side-status">
+      <span class="side-title lbl">Hệ thống</span>
+      <ul class="status" aria-label="Trạng thái hệ thống">
+        <li id="pill-ws" class="stat" title="Dashboard"><span>Dashboard</span><b>–</b></li>
+        <li id="pill-mqtt" class="stat" title="MQTT"><span>MQTT</span><b>–</b></li>
+        <li id="pill-gw" class="stat" title="Gateway"><span>Gateway</span><b>–</b></li>
+        <li id="pill-model" class="stat" title="Model"><span>Model</span><b>–</b></li>
+      </ul>
+    </div>
+
+    <button class="collapse-btn" id="collapse" aria-label="Thu gọn thanh bên"><svg class="ic"><use href="#i-collapse"/></svg><span class="lbl">Thu gọn</span></button>
+  </aside>
+  <div class="backdrop" id="backdrop"></div>
+
+  <div class="content">
+  <div class="strip" aria-hidden="true"></div>
+  <header class="topbar">
+    <button id="menu" class="ghost icon-btn" aria-label="Mở menu" aria-controls="sidebar" aria-expanded="false"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <div class="crumb">
+      <h1 id="page-title">Tổng quan</h1>
+      <p>Hệ thống tưới nước thông minh đa vùng</p>
+    </div>
+    <div class="actions">
+      <button id="stop-all" class="danger"><svg class="ic"><use href="#i-stop"/></svg><span class="hide-sm">Dừng tất cả</span></button>
+      <form method="post" action="/logout" id="logout" hidden><button class="ghost icon-btn" aria-label="Đăng xuất" title="Đăng xuất"><svg class="ic"><use href="#i-out"/></svg></button></form>
     </div>
   </header>
 
   <main>
-    <section id="zones" class="zones"></section>
-
-    <section class="panel">
-      <div class="panel-head">
-        <h2>Độ ẩm đất</h2>
-        <div class="seg" id="range">
-          <button data-h="6" class="on">6 giờ</button><button data-h="24">24 giờ</button><button data-h="168">7 ngày</button>
+    <!-- ===== Trang: Tổng quan ===== -->
+    <div class="page" data-page="overview" data-title="Tổng quan">
+    <section class="hero">
+      <div class="hero-grid">
+        <div class="hero-top">
+          <span class="eyebrow"><svg class="ic"><use href="#i-sprout"/></svg>ESP32 · ESP-NOW · MQTT · AI</span>
+          <span class="hero-brand"><svg class="ic"><use href="#i-leaf"/></svg>Smart Agri-Tech<i></i>IoT · Đồ án 2</span>
         </div>
+        <h2 class="hero-title">Hệ thống tưới thông minh đa vùng</h2>
+        <ul class="features">
+          <li><span class="f-ic c-cyan"><svg class="ic"><use href="#i-drop"/></svg></span>3 vùng điều khiển độc lập</li>
+          <li><span class="f-ic c-orange"><svg class="ic"><use href="#i-thermo"/></svg></span>Cảm biến độ ẩm &amp; nhiệt độ</li>
+          <li><span class="f-ic c-green"><svg class="ic"><use href="#i-tap"/></svg></span>Điều khiển bơm từ xa</li>
+          <li><span class="f-ic c-green"><svg class="ic"><use href="#i-cpu"/></svg></span>Thủ công · Ngưỡng · AI</li>
+        </ul>
+        <a href="#/charts" class="cta">Xem biểu đồ chi tiết<svg class="ic"><use href="#i-line"/></svg></a>
       </div>
-      <div class="chart"><canvas id="soil-chart"></canvas></div>
     </section>
 
-    <section class="panel">
-      <div class="panel-head">
-        <h2>Nhiệt độ và độ ẩm không khí</h2>
-        <select id="air-zone"><option value="1">Zone 1</option><option value="2">Zone 2</option><option value="3">Zone 3</option></select>
-      </div>
-      <div class="chart"><canvas id="air-chart"></canvas></div>
+    <section class="kpis" aria-label="Tổng quan">
+      <article class="card kpi">
+        <span class="kpi-ic tone-green"><svg class="ic"><use href="#i-nodes"/></svg></span>
+        <div><span class="kpi-label">Vùng online</span><b><span id="k-online">–</span><small> / 3 nút</small></b><p id="k-online-sub">Đang chờ dữ liệu</p></div>
+      </article>
+      <article class="card kpi">
+        <span class="kpi-ic tone-orange"><svg class="ic"><use href="#i-tap"/></svg></span>
+        <div><span class="kpi-label">Bơm đang chạy</span><b><span id="k-pump">–</span><small> / 3 bơm</small></b><p id="k-pump-sub">–</p></div>
+      </article>
+      <article class="card kpi">
+        <span class="kpi-ic tone-mint"><svg class="ic"><use href="#i-drop"/></svg></span>
+        <div><span class="kpi-label">Độ ẩm đất TB</span><b id="k-soil">–</b><p id="k-soil-sub">–</p></div>
+      </article>
+      <article class="card kpi">
+        <span class="kpi-ic tone-cyan"><svg class="ic"><use href="#i-bar"/></svg></span>
+        <div><span class="kpi-label">Đã tưới hôm nay</span><b><span id="k-water">–</span><small> lít</small></b><p id="k-water-sub">–</p></div>
+      </article>
     </section>
 
-    <section class="panel">
-      <h2>Nhật ký</h2>
-      <table class="log">
-        <thead><tr><th>Giờ</th><th>Zone</th><th>Lệnh</th><th>Seq</th><th>Nguồn</th><th>Trạng thái</th></tr></thead>
-        <tbody id="cmd-log"></tbody>
-      </table>
-      <ul id="event-log" class="events"></ul>
+    <section>
+      <div class="section-head">
+        <h2><i class="bullet"></i>Tình trạng các vùng</h2>
+        <a href="#/zones" class="link">Điều khiển chi tiết →</a>
+      </div>
+      <div id="minis" class="minis"></div>
     </section>
+    </div>
+
+    <!-- ===== Trang: Vùng tưới ===== -->
+    <div class="page" data-page="zones" data-title="Vùng tưới" hidden>
+    <section>
+      <div class="section-head">
+        <h2><i class="bullet"></i>Giám sát và điều khiển theo vùng</h2>
+        <span>Dữ liệu từ gateway ESP32</span>
+      </div>
+      <div id="zones" class="zones"></div>
+    </section>
+    </div>
+
+    <!-- ===== Trang: Biểu đồ ===== -->
+    <div class="page" data-page="charts" data-title="Biểu đồ" hidden>
+      <article class="card panel">
+        <div class="panel-head">
+          <div>
+            <h3><svg class="ic c-green"><use href="#i-line"/></svg>Xu hướng độ ẩm đất</h3>
+            <p class="sub">Tam giác đánh dấu thời điểm bắt đầu tưới</p>
+          </div>
+          <div class="seg" id="range" role="group" aria-label="Khoảng thời gian">
+            <button data-h="6" class="on">6 giờ</button><button data-h="24">24 giờ</button><button data-h="168">7 ngày</button>
+          </div>
+        </div>
+        <div class="chart chart-lg"><canvas id="soil-chart"></canvas></div>
+      </article>
+    <section class="row row-1-1">
+      <article class="card panel">
+        <div class="panel-head">
+          <div>
+            <h3><svg class="ic c-orange"><use href="#i-bar"/></svg>Nước tiêu thụ hôm nay</h3>
+            <p class="sub">Lít theo vùng, tính từ thời gian bơm × lưu lượng</p>
+          </div>
+        </div>
+        <div class="chart"><canvas id="water-chart"></canvas></div>
+      </article>
+      <article class="card panel">
+        <div class="panel-head">
+          <div>
+            <h3><svg class="ic c-cyan"><use href="#i-wind"/></svg>Nhiệt độ và độ ẩm không khí</h3>
+            <p class="sub">Cảm biến DHT22 tại nút</p>
+          </div>
+          <select id="air-zone" aria-label="Chọn vùng"><option value="1">Zone 1</option><option value="2">Zone 2</option><option value="3">Zone 3</option></select>
+        </div>
+        <div class="chart"><canvas id="air-chart"></canvas></div>
+      </article>
+    </section>
+    </div>
+
+    <!-- ===== Trang: Nhật ký lệnh ===== -->
+    <div class="page" data-page="commands" data-title="Nhật ký lệnh" hidden>
+      <article class="card panel">
+        <div class="panel-head">
+          <div>
+            <h3><svg class="ic c-green"><use href="#i-list"/></svg>Lệnh gần đây</h3>
+            <p class="sub">30 lệnh mới nhất gửi xuống nút và trạng thái ACK</p>
+          </div>
+        </div>
+        <div class="table-wrap table-lg">
+          <table class="log">
+            <thead><tr><th>Giờ</th><th>Zone</th><th>Lệnh</th><th class="num">Seq</th><th>Nguồn</th><th>Trạng thái</th></tr></thead>
+            <tbody id="cmd-log"></tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+
+    <!-- ===== Trang: Sự kiện ===== -->
+    <div class="page" data-page="events" data-title="Sự kiện" hidden>
+      <section class="card panel">
+        <div class="panel-head">
+          <div class="term-title"><i class="d r"></i><i class="d y"></i><i class="d g"></i><span>MQTT real-time event terminal</span></div>
+          <button id="clear-log" class="ghost sm"><svg class="ic"><use href="#i-trash"/></svg>Xóa nhật ký</button>
+        </div>
+        <ul id="event-log" class="terminal terminal-lg" aria-live="polite"></ul>
+      </section>
+    </div>
   </main>
 
+  <footer>Multi-Zone Smart Irrigation · Đồ án 2 · 2026</footer>
+  </div>
+  </div>
+
+  <template id="mini-tpl">
+    <a class="card mini">
+      <div class="mini-head">
+        <span class="zone-ic"><svg class="ic"><use href="#i-sprout"/></svg></span>
+        <div class="zone-title"><h3 data-f="name"></h3><p><span class="online" data-f="online"></span> · <span data-f="mode">–</span></p></div>
+        <span class="badge" data-f="state">–</span>
+      </div>
+      <div class="reading-top"><span>Độ ẩm đất</span><b><span data-f="soil">–</span>%</b></div>
+      <div class="gauge" data-f="gauge" aria-hidden="true"><i class="fill"></i><i class="mark low"></i><i class="mark target"></i></div>
+      <div class="mini-foot"><span data-f="air">–</span><span class="pump" data-f="pump">Đang tắt</span></div>
+    </a>
+  </template>
+
   <template id="zone-tpl">
-    <article class="zone">
-      <div class="zone-head">
-        <h3 data-f="name"></h3>
-        <span class="dot" data-f="online"></span>
+    <article class="card zone">
+      <header class="zone-head">
+        <span class="zone-ic"><svg class="ic"><use href="#i-sprout"/></svg></span>
+        <div class="zone-title">
+          <h3 data-f="name"></h3>
+          <p><span class="online" data-f="online"></span> · <span data-f="last_seen">–</span></p>
+        </div>
+        <span class="badge" data-f="state">–</span>
+      </header>
+
+      <div class="reading">
+        <div class="reading-top">
+          <span>Độ ẩm đất hiện tại</span>
+          <b><span data-f="soil">–</span>%</b>
+        </div>
+        <div class="gauge" data-f="gauge" aria-hidden="true"><i class="fill"></i><i class="mark low"></i><i class="mark target"></i></div>
+        <div class="gauge-legend"><span>Ngưỡng tưới <b data-f="low">–</b></span><span>Mục tiêu <b data-f="target">–</b></span></div>
       </div>
-      <div class="soil"><span data-f="soil">–</span><small>% độ ẩm đất</small></div>
+
       <dl class="facts">
-        <dt>Nhiệt độ</dt><dd data-f="temp">–</dd>
-        <dt>Độ ẩm KK</dt><dd data-f="hum">–</dd>
-        <dt>Bơm</dt><dd data-f="pump">–</dd>
-        <dt>Nút</dt><dd data-f="node_mode">–</dd>
-        <dt>RSSI</dt><dd data-f="rssi">–</dd>
-        <dt>Thấy lần cuối</dt><dd data-f="last_seen">–</dd>
-        <dt>Quyết định</dt><dd data-f="prediction">–</dd>
+        <div><dt><svg class="ic"><use href="#i-thermo"/></svg>Nhiệt độ</dt><dd data-f="temp">–</dd></div>
+        <div><dt><svg class="ic"><use href="#i-drop"/></svg>Độ ẩm KK</dt><dd data-f="hum">–</dd></div>
+        <div><dt><svg class="ic"><use href="#i-signal"/></svg>RSSI</dt><dd data-f="rssi">–</dd></div>
+        <div><dt><svg class="ic"><use href="#i-cpu"/></svg>Chế độ nút</dt><dd data-f="node_mode">–</dd></div>
       </dl>
-      <div class="controls">
-        <select data-c="mode"><option>MANUAL</option><option>THRESHOLD</option><option>AI</option></select>
-        <input data-c="dur" type="number" min="1" max="30" value="10" aria-label="Số giây tưới">
-        <button data-c="water" class="primary">Tưới</button>
-        <button data-c="stop">Dừng</button>
+
+      <div class="pump-box">
+        <div>
+          <span class="pump-label">Máy bơm</span>
+          <span class="pump" data-f="pump">Đang tắt</span>
+        </div>
+        <div class="seg mode" data-c="mode" role="group" aria-label="Chế độ điều khiển">
+          <button type="button" data-v="MANUAL">Thủ công</button><button type="button" data-v="THRESHOLD">Ngưỡng</button><button type="button" data-v="AI">AI</button>
+        </div>
       </div>
+
+      <div class="quick">
+        <span class="quick-label">Tưới nhanh</span>
+        <div class="quick-row">
+          <button data-c="preset" data-s="5">5 giây</button>
+          <button data-c="preset" data-s="10">10 giây</button>
+          <button data-c="preset" data-s="20">20 giây</button>
+        </div>
+        <div class="quick-row">
+          <label class="dur"><input data-c="dur" type="number" min="1" max="30" value="10" aria-label="Số giây tưới"><span>giây</span></label>
+          <button data-c="water" class="primary">Tưới</button>
+          <button data-c="stop" class="stop">Dừng</button>
+        </div>
+      </div>
+
+      <p class="decision"><svg class="ic"><use href="#i-cpu"/></svg><span data-f="prediction">Chưa có quyết định</span></p>
+
       <details>
-        <summary>Cấu hình</summary>
+        <summary><svg class="ic"><use href="#i-sliders"/></svg>Cấu hình vùng</summary>
         <form data-c="cfg" class="cfg">
-          <label>soil_low (%)<input name="soil_low" type="number" step="0.5"></label>
-          <label>soil_target (%)<input name="soil_target" type="number" step="0.5"></label>
-          <label>pump_max_s<input name="pump_max_s" type="number" min="1" max="30"></label>
-          <label>threshold_dur<input name="threshold_dur" type="number" min="3" max="30"></label>
-          <label>cooldown_s<input name="cooldown_s" type="number" min="0"></label>
-          <label>fallback_s<input name="fallback_s" type="number" min="1" max="30"></label>
-          <label>pump_flow_ml_s<input name="pump_flow_ml_s" type="number" step="0.1" min="0"></label>
-          <label class="check"><input name="collect_mode" type="checkbox"> collect_mode</label>
-          <button class="primary">Lưu</button>
+          <label><span>Ngưỡng tưới (%) <code>soil_low</code></span><input name="soil_low" type="number" step="0.5"></label>
+          <label><span>Mục tiêu (%) <code>soil_target</code></span><input name="soil_target" type="number" step="0.5"></label>
+          <label><span>Bơm tối đa (s) <code>pump_max_s</code></span><input name="pump_max_s" type="number" min="1" max="30"></label>
+          <label><span>Tưới theo ngưỡng (s) <code>threshold_dur</code></span><input name="threshold_dur" type="number" min="3" max="30"></label>
+          <label><span>Nghỉ giữa lần (s) <code>cooldown_s</code></span><input name="cooldown_s" type="number" min="0"></label>
+          <label><span>Dự phòng (s) <code>fallback_s</code></span><input name="fallback_s" type="number" min="1" max="30"></label>
+          <label><span>Lưu lượng (ml/s) <code>pump_flow_ml_s</code></span><input name="pump_flow_ml_s" type="number" step="0.1" min="0"></label>
+          <label class="check"><input name="collect_mode" type="checkbox"> <span>Thu thập dữ liệu <code>collect_mode</code></span></label>
+          <button class="primary">Lưu cấu hình</button>
         </form>
       </details>
-      <p class="msg" data-f="msg"></p>
+      <p class="msg" data-f="msg" role="status"></p>
     </article>
   </template>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=2026-10-26g"></script>
 </body>
 </html>

@@ -22,7 +22,8 @@ router = APIRouter()
 COOKIE = "irr_session"
 SESSION_S = 7 * 24 * 3600
 FAIL_DELAY_S = 1.0  # làm chậm dò mật khẩu
-PUBLIC_PATHS = {"/login", "/logout"}
+# Ảnh nền + favicon cần tải được ngay ở trang đăng nhập
+PUBLIC_PATHS = {"/login", "/logout", "/login-bg.webp", "/favicon.svg", "/favicon.ico", "/apple-touch-icon.png"}
 
 
 def _settings(app):
@@ -77,34 +78,62 @@ LOGIN_PAGE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Đăng nhập · Tưới cây đa vùng</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#0a4225">
 <style>
-  :root {{ --bg:#f4f6f3; --card:#fff; --text:#1d2420; --muted:#64706a; --line:#dde3df; --accent:#1f7a4d; --bad:#c2410c; }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{ --bg:#121614; --card:#1b211e; --text:#e6ece8; --muted:#94a19a; --line:#2c3530; --accent:#34a46b; --bad:#f07a45; }}
+  :root {{ --deep:#0a4225; --forest:#145a32; --emerald:#1e8449; --lime:#a3e635; --muted:#5b6b62; --line:#e2e8f0;
+          --bad:#be123c; --bad-soft:#fff1f2; color-scheme:light; }}
+  body {{ margin:0; min-height:100vh; display:grid; grid-template-columns:minmax(0, 1fr) minmax(420px, 40%);
+         color:#143221; background:#efe5c8; font:14px/1.5 Inter, system-ui, "Segoe UI", Roboto, sans-serif; }}
+  /* ?v=: đổi khi thay ảnh để Cloudflare không trả ảnh cũ */
+  .art {{ background:#c9b37a url("/login-bg.webp?v=2") center 65% / cover no-repeat; }}
+  .side {{ display:grid; place-items:center; padding:24px 16px;
+          background:radial-gradient(circle at 80% 15%, rgb(163 230 53 / .14) 0, transparent 45%),
+                     linear-gradient(160deg, #f3ebd2, #e8dcb6); }}
+  @media (max-width: 860px) {{
+    body {{ display:block; background:#c9b37a url("/login-bg.webp?v=2") center 85% / cover no-repeat fixed; }}
+    .art {{ display:none; }}
+    .side {{ min-height:100vh; box-sizing:border-box; background:rgb(60 50 20 / .12); }}
   }}
-  body {{ margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text);
-         font:14px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; padding:16px; box-sizing:border-box; }}
-  form {{ width:100%; max-width:320px; background:var(--card); border:1px solid var(--line); border-radius:10px;
-         padding:20px; display:grid; gap:12px; }}
-  h1 {{ font-size:17px; margin:0; }}
-  p {{ margin:0; color:var(--muted); }}
-  label {{ display:grid; gap:4px; font-size:13px; color:var(--muted); }}
-  input {{ font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:6px;
-          padding:8px; }}
-  button {{ font:inherit; background:var(--accent); color:#fff; border:0; border-radius:6px; padding:9px; cursor:pointer; }}
-  .err {{ color:var(--bad); }}
+  form {{ box-sizing:border-box; width:100%; max-width:380px; background:#fff; border:1px solid var(--line); border-radius:0; overflow:hidden;
+         display:grid; gap:14px; padding:0 28px 28px;
+         box-shadow:0 20px 35px -5px rgb(10 66 37 / .12), 0 8px 20px -2px rgb(10 66 37 / .05); }}
+  .strip {{ height:6px; margin:0 -28px 10px; background:linear-gradient(90deg, var(--deep), var(--lime), #ea580c); }}
+  .brand {{ display:flex; align-items:center; gap:12px; margin-bottom:6px; }}
+  .logo {{ width:44px; height:44px; padding:11px; border-radius:0; flex:none; box-sizing:border-box;
+          background:linear-gradient(135deg, var(--deep), var(--emerald)); fill:none; stroke:var(--lime);
+          stroke-width:2; stroke-linecap:round; stroke-linejoin:round; box-shadow:0 6px 14px -4px rgb(10 66 37 / .35); }}
+  h1 {{ font-size:18px; font-weight:800; margin:0; color:var(--deep); letter-spacing:-0.015em; }}
+  p {{ margin:0; color:var(--muted); font-size:12px; }}
+  label {{ display:grid; gap:6px; font-size:12px; font-weight:700; color:#4b5563; }}
+  input {{ font:inherit; color:var(--deep); background:#f9fafb; border:1px solid var(--line); border-radius:0;
+          padding:0 12px; min-height:44px; transition:border-color .2s, box-shadow .2s; }}
+  input:focus {{ outline:none; border-color:var(--emerald); background:#fff; box-shadow:0 0 0 3px rgb(30 132 73 / .12); }}
+  :focus-visible {{ outline:2px solid var(--emerald); outline-offset:2px; }}
+  button {{ font:inherit; font-weight:700; background:var(--deep); color:#fff; border:0; border-radius:0;
+           min-height:44px; cursor:pointer; margin-top:6px; transition:background-color .2s; }}
+  button:hover {{ background:var(--forest); }}
+  .err {{ color:var(--bad); background:var(--bad-soft); border:1px solid #fecdd3; padding:8px 12px; border-radius:0; font-weight:600; }}
 </style>
 </head>
 <body>
+<div class="art" role="img" aria-label="Tranh vẽ vân gỗ với muông thú và cây cỏ"></div>
+<main class="side">
 <form method="post" action="/login">
-  <h1>Tưới cây thông minh đa vùng</h1>
-  <p>Đăng nhập để xem và điều khiển.</p>
+  <div class="strip" aria-hidden="true"></div>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+    <div><h1>Smart Irrigation</h1><p>Hệ thống tưới nước thông minh đa vùng</p></div>
+  </div>
   {error}
   <input type="hidden" name="next" value="{next}">
   <label>Tài khoản<input name="user" autocomplete="username" required value="{user}"></label>
   <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" required autofocus></label>
   <button>Đăng nhập</button>
 </form>
+</main>
 </body>
 </html>"""
 
