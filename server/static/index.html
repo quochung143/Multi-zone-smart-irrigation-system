@@ -3,12 +3,93 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Smart Irrigation</title>
+  <title>Tưới cây đa vùng</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Tưới cây thông minh đa vùng</h1>
-  <!-- TODO: 3 thẻ Zone, biểu đồ lịch sử, điều khiển (docs/DESIGN.md §10) -->
+  <header>
+    <h1>Tưới cây thông minh đa vùng</h1>
+    <div class="pills">
+      <span id="pill-ws" class="pill">Dashboard</span>
+      <span id="pill-mqtt" class="pill">MQTT</span>
+      <span id="pill-gw" class="pill">Gateway</span>
+      <span id="pill-model" class="pill">Model</span>
+      <form method="post" action="/logout" id="logout" hidden><button class="pill">Đăng xuất</button></form>
+    </div>
+  </header>
+
+  <main>
+    <section id="zones" class="zones"></section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Độ ẩm đất</h2>
+        <div class="seg" id="range">
+          <button data-h="6" class="on">6 giờ</button><button data-h="24">24 giờ</button><button data-h="168">7 ngày</button>
+        </div>
+      </div>
+      <div class="chart"><canvas id="soil-chart"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Nhiệt độ và độ ẩm không khí</h2>
+        <select id="air-zone"><option value="1">Zone 1</option><option value="2">Zone 2</option><option value="3">Zone 3</option></select>
+      </div>
+      <div class="chart"><canvas id="air-chart"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <h2>Nhật ký</h2>
+      <table class="log">
+        <thead><tr><th>Giờ</th><th>Zone</th><th>Lệnh</th><th>Seq</th><th>Nguồn</th><th>Trạng thái</th></tr></thead>
+        <tbody id="cmd-log"></tbody>
+      </table>
+      <ul id="event-log" class="events"></ul>
+    </section>
+  </main>
+
+  <template id="zone-tpl">
+    <article class="zone">
+      <div class="zone-head">
+        <h3 data-f="name"></h3>
+        <span class="dot" data-f="online"></span>
+      </div>
+      <div class="soil"><span data-f="soil">–</span><small>% độ ẩm đất</small></div>
+      <dl class="facts">
+        <dt>Nhiệt độ</dt><dd data-f="temp">–</dd>
+        <dt>Độ ẩm KK</dt><dd data-f="hum">–</dd>
+        <dt>Bơm</dt><dd data-f="pump">–</dd>
+        <dt>Nút</dt><dd data-f="node_mode">–</dd>
+        <dt>RSSI</dt><dd data-f="rssi">–</dd>
+        <dt>Thấy lần cuối</dt><dd data-f="last_seen">–</dd>
+        <dt>Quyết định</dt><dd data-f="prediction">–</dd>
+      </dl>
+      <div class="controls">
+        <select data-c="mode"><option>MANUAL</option><option>THRESHOLD</option><option>AI</option></select>
+        <input data-c="dur" type="number" min="1" max="30" value="10" aria-label="Số giây tưới">
+        <button data-c="water" class="primary">Tưới</button>
+        <button data-c="stop">Dừng</button>
+      </div>
+      <details>
+        <summary>Cấu hình</summary>
+        <form data-c="cfg" class="cfg">
+          <label>soil_low (%)<input name="soil_low" type="number" step="0.5"></label>
+          <label>soil_target (%)<input name="soil_target" type="number" step="0.5"></label>
+          <label>pump_max_s<input name="pump_max_s" type="number" min="1" max="30"></label>
+          <label>threshold_dur<input name="threshold_dur" type="number" min="3" max="30"></label>
+          <label>cooldown_s<input name="cooldown_s" type="number" min="0"></label>
+          <label>fallback_s<input name="fallback_s" type="number" min="1" max="30"></label>
+          <label>pump_flow_ml_s<input name="pump_flow_ml_s" type="number" step="0.1" min="0"></label>
+          <label class="check"><input name="collect_mode" type="checkbox"> collect_mode</label>
+          <button class="primary">Lưu</button>
+        </form>
+      </details>
+      <p class="msg" data-f="msg"></p>
+    </article>
+  </template>
+
+  <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

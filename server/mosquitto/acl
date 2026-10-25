@@ -1,0 +1,13 @@
+# Gateway chỉ publish chiều lên, chỉ đọc lệnh và trạng thái server
+user gateway
+topic write irr/z/+/tel
+topic write irr/z/+/pump
+topic write irr/z/+/ack
+topic write irr/z/+/node
+topic write irr/z/+/stat
+topic write irr/gw/status
+topic read irr/z/+/cmd
+topic read irr/srv/#
+
+user server
+topic readwrite irr/#

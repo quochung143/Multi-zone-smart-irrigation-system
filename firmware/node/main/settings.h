@@ -16,3 +16,7 @@ bool settings_set(const node_settings_t *s);  // false nếu giá trị không h
 // Zone ID của nút (1..NUM_ZONES), 0 = chưa đặt. Cả 3 nút dùng chung một firmware.
 uint8_t settings_get_zone(void);
 bool settings_set_zone(uint8_t zone);
+
+// Kênh ESP-NOW tìm được lần cuối (1..CHANNEL_MAX), mặc định ESPNOW_CHANNEL
+uint8_t settings_get_channel(void);
+void settings_set_channel(uint8_t ch);

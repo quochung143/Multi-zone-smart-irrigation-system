@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Tưới cây đa vùng: ESP-NOW + MQTT + FastAPI",
+    "output": ".archify/architecture-irrigation-mqtt-20261025-215108/irrigation-mqtt.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "z1", "type": "external", "label": "Nút Zone 1", "sublabel": "ESP32 + đất + DHT22", "pos": [40, 40], "size": [130, 60] },
+    { "id": "z2", "type": "external", "label": "Nút Zone 2", "sublabel": "relay bơm 5V", "pos": [40, 130], "size": [130, 60], "tag": "dò kênh 1–13" },
+    { "id": "z3", "type": "external", "label": "Nút Zone 3", "sublabel": "fallback sau 5 phút", "pos": [40, 220], "size": [130, 60] },
+    { "id": "gw", "type": "backend", "label": "Gateway ESP32", "sublabel": "ESP-NOW ⇄ MQTT", "pos": [270, 130], "size": [130, 60], "tag": "TFT + NVS" },
+    { "id": "hotspot", "type": "cloud", "label": "Hotspot điện thoại", "sublabel": "Wi-Fi 2.4 GHz", "pos": [480, 130], "size": [130, 60] },
+    { "id": "broker", "type": "messagebus", "label": "Mosquitto", "sublabel": "broker :1883 trên laptop", "pos": [720, 130], "size": [140, 60], "tag": "ACL + LWT" },
+    { "id": "dash", "type": "frontend", "label": "Web dashboard", "sublabel": "HTML/JS + Chart.js", "pos": [1110, 100], "size": [130, 60] },
+    { "id": "api", "type": "backend", "label": "api.py + ws.py", "sublabel": "REST + WebSocket", "pos": [1110, 240], "size": [130, 60] },
+    { "id": "commands", "type": "backend", "label": "commands.py", "sublabel": "seq $inc, chờ ACK 5 s", "pos": [520, 320], "size": [130, 60] },
+    { "id": "link", "type": "backend", "label": "mqtt_link.py", "sublabel": "aiomqtt, time 60 s", "pos": [725, 320], "size": [130, 60] },
+    { "id": "ingest", "type": "backend", "label": "ingest.py", "sublabel": "dispatch theo topic", "pos": [935, 320], "size": [120, 60] },
+    { "id": "decision", "type": "backend", "label": "decision.py", "sublabel": "mốc :00/:05 mỗi Zone", "pos": [520, 470], "size": [130, 60] },
+    { "id": "registry", "type": "backend", "label": "registry.py", "sublabel": "ZoneRegistry (RAM)", "pos": [935, 470], "size": [120, 60] },
+    { "id": "events", "type": "backend", "label": "events.py", "sublabel": "irrigation_events", "pos": [1110, 470], "size": [130, 60] },
+    { "id": "ml", "type": "backend", "label": "ml_runtime.py", "sublabel": "RF / XGBoost joblib", "pos": [520, 620], "size": [130, 60] },
+    { "id": "mongo", "type": "database", "label": "MongoDB 7 (db.py)", "sublabel": "readings · zones · commands · predictions · irrigation_events · gw_sessions · link_stats", "pos": [725, 620], "size": [515, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Server FastAPI — 1 tiến trình, 1 worker", "wraps": ["api", "commands", "link", "ingest", "decision", "registry", "events", "ml", "mongo"] }
+  ],
+  "connections": [
+    { "id": "z1-gw", "from": "z1", "to": "gw" },
+    { "id": "z2-gw", "from": "z2", "to": "gw", "label": "ESP-NOW + ACK", "variant": "emphasis" },
+    { "id": "z3-gw", "from": "z3", "to": "gw" },
+    { "id": "gw-hotspot", "from": "gw", "to": "hotspot", "label": "Wi-Fi", "variant": "emphasis" },
+    { "id": "hotspot-broker", "from": "hotspot", "to": "broker", "label": "MQTT", "variant": "emphasis" },
+    { "id": "broker-link", "from": "broker", "to": "link", "label": "sub / pub", "variant": "emphasis" },
+    { "id": "link-ingest", "from": "link", "to": "ingest", "label": "dispatch", "variant": "emphasis" },
+    { "id": "ingest-api", "from": "ingest", "to": "api", "label": "đẩy WS" },
+    { "id": "dash-api", "from": "dash", "to": "api", "label": "REST + WS" },
+    { "id": "ingest-registry", "from": "ingest", "to": "registry", "label": "cập nhật" },
+    { "id": "ingest-events", "from": "ingest", "to": "events", "label": "pump" },
+    { "id": "decision-registry", "from": "decision", "to": "registry", "label": "đọc trạng thái + cấu hình" },
+    { "id": "decision-commands", "from": "decision", "to": "commands", "label": "lệnh tưới" },
+    { "id": "commands-link", "from": "commands", "to": "link", "label": "cmd" },
+    { "id": "api-commands", "from": "api", "to": "commands", "label": "tưới tay / stop", "variant": "dashed" },
+    { "id": "decision-ml", "from": "decision", "to": "ml", "label": "p_need, dur" },
+    { "id": "ml-mongo", "from": "ml", "to": "mongo", "label": "đọc" },
+    { "id": "registry-mongo", "from": "registry", "to": "mongo", "label": "zones" },
+    { "id": "events-mongo", "from": "events", "to": "mongo", "label": "ghi" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Topic MQTT", "items": ["Lên: irr/z/{zone}/tel (QoS 0), pump · ack · node (QoS 1), stat", "Xuống: irr/z/{zone}/cmd (QoS 1, water/stop/cfg)", "Trạng thái retain + LWT: irr/gw/status, irr/srv/status", "Heartbeat: irr/srv/time mỗi 60 s"] },
+    { "dot": "rose", "title": "An toàn", "items": ["Gateway chỉ phát beacon khi srv/status=online và có time trong 3 phút", "Mất server quá 5 phút thì nút tự tưới fallback", "Nút luôn giới hạn bơm ≤ 30 s, cooldown 10 phút", "Lệnh không có ACK sau 5 s hoặc gateway offline → no_ack"] },
+    { "dot": "emerald", "title": "Quyết định mỗi 5 phút", "items": ["MANUAL: chỉ tưới khi bấm trên dashboard (force)", "THRESHOLD: soil < soil_low và hết cooldown", "AI: p_need ≥ 0.5 thì dur = clip(reg(x), 3, pump_max_s)", "Bỏ qua Zone offline hoặc dữ liệu cũ hơn 2 phút"] },
+    { "dot": "amber", "title": "Kết nối lại", "items": ["gw/status=online → gửi time rồi cfg cho cả 3 Zone", "Zone online lại → gửi cfg cho Zone đó", "Không đệm dữ liệu; khoảng trống ghi vào gw_sessions / srv_sessions"] }
+  ]
+}

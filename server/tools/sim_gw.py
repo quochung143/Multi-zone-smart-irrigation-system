@@ -9,6 +9,7 @@ Mô phỏng theo firmware (gateway/main/cmd.c, node/main/pump.c, comm.c):
 
 Chạy:  python server/tools/sim_gw.py [--offline 3] [--tel 5]
        (mở gw_test.py với cổng giả; gõ lệnh như khi có board thật)
+       python server/tools/gw_bridge.py sim ...   (giả lập nối vào MQTT cho server)
 """
 import argparse
 import json
@@ -19,8 +20,6 @@ import sys
 import threading
 import time
 from pathlib import Path
-
-import serial
 
 PUMP_MAX_S = 30
 COOLDOWN_S = 600
@@ -190,6 +189,8 @@ def main() -> None:
     ap.add_argument("--offline", type=int, nargs="*", default=[], help="zone không trả lời (thử timeout)")
     ap.add_argument("--tel", type=float, default=5, help="chu kỳ tel giả lập (s), thật là 30 s")
     args, rest = ap.parse_known_args()
+
+    import serial
 
     gw = FakeGateway(set(args.offline), args.tel)
     serial.serial_for_url = lambda *a, **k: gw

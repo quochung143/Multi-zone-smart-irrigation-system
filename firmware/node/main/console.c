@@ -60,7 +60,8 @@ static int cmd_status(int argc, char **argv)
                      (unsigned long)(p.elapsed_ms / 1000), p.target_s);
     printf(" | cooldown %lus\n", (unsigned long)(p.cooldown_left_ms / 1000));
     printf("Settings: low=%.1f%% max=%us fb=%us\n", cfg.soil_low_x10 / 10.0f, cfg.pump_max_s, cfg.fallback_water_s);
-    printf("Comm: mode=%s | gateway cuoi %lus truoc\n", comm_mode() == MODE_FALLBACK ? "FALLBACK" : "NORMAL",
+    printf("Comm: mode=%s | kenh %u | gateway cuoi %lus truoc\n",
+           comm_mode() == MODE_FALLBACK ? "FALLBACK" : "NORMAL", comm_channel(),
            (unsigned long)(comm_gateway_age_ms() / 1000));
 
     msg_telemetry_t msg;
@@ -154,6 +155,13 @@ static int cmd_set(int argc, char **argv)
     return 0;
 }
 
+static int cmd_scan(int argc, char **argv)
+{
+    comm_request_scan();
+    printf("Do kenh bang goi telemetry ke tiep (kenh hien tai %u), xem ket qua bang 'status'\n", comm_channel());
+    return 0;
+}
+
 static void stream_task(void *arg)
 {
     for (;;) {
@@ -192,6 +200,7 @@ void console_start(void)
     register_cmd("stop", "Tat bom", cmd_stop);
     register_cmd("cooldown_clear", "Xoa cooldown (chi de thu nghiem)", cmd_cooldown);
     register_cmd("set", "set low|max|fb <gia tri>", cmd_set);
+    register_cmd("scan", "Do lai kenh ESP-NOW cua gateway (kenh theo hotspot)", cmd_scan);
 
     xTaskCreatePinnedToCore(stream_task, "stream", 3072, NULL, 1, NULL, 1);
     ESP_ERROR_CHECK(esp_console_start_repl(repl));

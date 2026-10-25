@@ -8,6 +8,7 @@
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 static node_settings_t current = {DEFAULT_SOIL_LOW_X10, PUMP_MAX_S, FALLBACK_WATER_S};
 static uint8_t zone_id = 0;
+static uint8_t channel = ESPNOW_CHANNEL;
 
 static bool valid(const node_settings_t *s)
 {
@@ -26,6 +27,8 @@ void settings_init(void)
     nvs_get_u16(h, "fb", &s.fallback_water_s);
     uint8_t z = 0;
     if (nvs_get_u8(h, "zone", &z) == ESP_OK && z >= 1 && z <= NUM_ZONES) zone_id = z;
+    uint8_t ch = 0;
+    if (nvs_get_u8(h, "ch", &ch) == ESP_OK && ch >= 1 && ch <= CHANNEL_MAX) channel = ch;
     nvs_close(h);
     if (valid(&s)) current = s;
 }
@@ -72,4 +75,21 @@ bool settings_set_zone(uint8_t zone)
         nvs_close(h);
     }
     return true;
+}
+
+uint8_t settings_get_channel(void)
+{
+    return channel;
+}
+
+void settings_set_channel(uint8_t ch)
+{
+    if (ch < 1 || ch > CHANNEL_MAX || ch == channel) return;
+    channel = ch;
+    nvs_handle_t h;
+    if (nvs_open("cfg", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_u8(h, "ch", ch);
+        nvs_commit(h);
+        nvs_close(h);
+    }
 }

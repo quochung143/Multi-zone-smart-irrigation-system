@@ -1,4 +1,9 @@
-// Node Zone: ESP-NOW + chế độ fallback (docs/DESIGN.md §4.2, docs/PROTOCOL.md)
+// Node Zone: ESP-NOW + chế độ fallback + dò kênh (docs/DESIGN.md §4.2, docs/PROTOCOL.md, docs/SERVER.md §8.4)
+//
+// Dò kênh: gateway chạy theo kênh hotspot điện thoại (không chọn được, đổi mỗi lần bật).
+// Nút gửi lỗi ở lớp MAC SCAN_AFTER_FAILS lần liên tiếp thì thử lại chính gói đó trên lần lượt các kênh;
+// kênh nào gateway trả ACK lớp MAC là kênh đúng, lưu NVS. Không dò theo mất beacon vì gateway cố ý
+// ngừng beacon khi server chết (để nút vào FALLBACK), lúc đó gateway vẫn ở đúng kênh và vẫn ACK lớp MAC.
 #include "comm.h"
 
 #include <math.h>
@@ -35,6 +40,12 @@ static volatile node_mode_t mode = MODE_NORMAL;
 static uint16_t tx_seq = 0;
 static uint32_t led_until_ms = 0;
 
+static volatile uint8_t channel = ESPNOW_CHANNEL;
+// Bắt đầu sát ngưỡng: lần gửi đầu tiên sau khi khởi động mà lỗi thì dò ngay
+static int tx_fail_streak = SCAN_AFTER_FAILS - 1;
+static uint32_t next_scan_ms = 0;
+static volatile bool scan_requested = false;
+
 // Chống thực thi lặp khi gateway gửi lại lệnh
 static bool has_last_cmd = false;
 static uint16_t last_cmd_seq = 0;
@@ -67,17 +78,61 @@ static void on_pump_event(const pump_event_t *ev)
 
 // ---------- Gửi (chỉ gọi từ commTask) ----------
 
-// Gửi và chờ ACK lớp MAC; lỗi thì gửi lại tối đa TX_RETRY_MAX lần.
-static bool send_reliable(const void *msg, size_t len)
+// Gửi một lần và chờ ACK lớp MAC.
+static bool send_once(const void *msg, size_t len)
 {
     uint32_t result;
-    for (int attempt = 0; attempt <= TX_RETRY_MAX; attempt++) {
-        xTaskNotifyWait(0, UINT32_MAX, &result, 0);  // xóa thông báo cũ
-        if (esp_now_send(GATEWAY_MAC, msg, len) != ESP_OK) continue;
-        if (xTaskNotifyWait(0, UINT32_MAX, &result, pdMS_TO_TICKS(TX_WAIT_MS)) == pdTRUE && result == 1)
-            return true;
+    xTaskNotifyWait(0, UINT32_MAX, &result, 0);  // xóa thông báo cũ
+    if (esp_now_send(GATEWAY_MAC, msg, len) != ESP_OK) return false;
+    return xTaskNotifyWait(0, UINT32_MAX, &result, pdMS_TO_TICKS(TX_WAIT_MS)) == pdTRUE && result == 1;
+}
+
+static void set_channel(uint8_t ch)
+{
+    ESP_ERROR_CHECK(esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE));
+    channel = ch;
+}
+
+// Thử gói `msg` (giữ nguyên seq, gateway chỉ nhận đúng 1 bản) trên từng kênh, bắt đầu từ kênh hiện tại.
+static bool scan_channels(const void *msg, size_t len)
+{
+    uint8_t start = channel;
+    ESP_LOGW(TAG, "khong lien lac duoc gateway tren kenh %u: do kenh", start);
+    for (int round = 0; round < SCAN_ROUNDS; round++) {
+        for (int i = 0; i < CHANNEL_MAX; i++) {
+            uint8_t ch = (uint8_t)((start - 1 + i) % CHANNEL_MAX + 1);
+            esp_task_wdt_reset();
+            set_channel(ch);
+            if (send_once(msg, len)) {
+                ESP_LOGW(TAG, "gateway o kenh %u", ch);
+                settings_set_channel(ch);
+                return true;
+            }
+        }
     }
+    ESP_LOGW(TAG, "khong thay gateway tren kenh 1..%d, thu lai sau %d s", CHANNEL_MAX, SCAN_RETRY_MS / 1000);
+    set_channel(start);
     return false;
+}
+
+// Gửi, lỗi thì gửi lại tối đa TX_RETRY_MAX lần; lỗi liên tiếp nhiều lần (hoặc console 'scan')
+// thì dò kênh với chính gói này.
+static bool send_reliable(const void *msg, size_t len)
+{
+    if (!scan_requested) {
+        for (int attempt = 0; attempt <= TX_RETRY_MAX; attempt++) {
+            if (send_once(msg, len)) {
+                tx_fail_streak = 0;
+                return true;
+            }
+        }
+        if (++tx_fail_streak < SCAN_AFTER_FAILS || (int32_t)(now_ms() - next_scan_ms) < 0) return false;
+    }
+    scan_requested = false;
+    bool ok = scan_channels(msg, len);
+    tx_fail_streak = 0;
+    next_scan_ms = ok ? now_ms() : now_ms() + SCAN_RETRY_MS;
+    return ok;
 }
 
 static void send_telemetry(uint8_t zone)
@@ -197,6 +252,7 @@ static void comm_task(void *arg)
             if (zone) send_pump_event(zone, &ev);
 
         uint32_t now = now_ms();
+        if (scan_requested) next_tel_ms = now;  // console 'scan': dò ngay bằng telemetry kế tiếp
         if ((int32_t)(now - next_tel_ms) >= 0) {
             if (zone) send_telemetry(zone);
             else ESP_LOGW(TAG, "chua dat zone, go 'zone <1-3>'");
@@ -229,13 +285,14 @@ void comm_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE));
+    set_channel(settings_get_channel());  // kênh tìm được lần trước
 
     ESP_ERROR_CHECK(esp_now_init());
     ESP_ERROR_CHECK(esp_now_register_recv_cb(on_recv));
     ESP_ERROR_CHECK(esp_now_register_send_cb(on_sent));
 
-    esp_now_peer_info_t peer = {.channel = ESPNOW_CHANNEL, .ifidx = WIFI_IF_STA, .encrypt = false};
+    // Kênh 0 = kênh hiện tại của radio: đổi kênh khi dò không cần khai báo lại peer
+    esp_now_peer_info_t peer = {.channel = 0, .ifidx = WIFI_IF_STA, .encrypt = false};
     memcpy(peer.peer_addr, GATEWAY_MAC, 6);
     if (esp_now_add_peer(&peer) != ESP_OK) ESP_LOGE(TAG, "them peer gateway loi (MAC trong app_config.h?)");
 }
@@ -253,6 +310,16 @@ node_mode_t comm_mode(void)
 uint32_t comm_gateway_age_ms(void)
 {
     return now_ms() - last_gw_rx_ms;
+}
+
+uint8_t comm_channel(void)
+{
+    return channel;
+}
+
+void comm_request_scan(void)
+{
+    scan_requested = true;
 }
 
 void comm_build_telemetry(msg_telemetry_t *msg, uint8_t zone, uint16_t seq)

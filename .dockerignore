@@ -1,0 +1,13 @@
+.git
+.vscode
+.archify
+docs
+firmware
+ml/data
+ml/notebooks
+**/__pycache__
+**/*.pyc
+server/.env
+server/logs
+server/mosquitto/passwd
+server/tests

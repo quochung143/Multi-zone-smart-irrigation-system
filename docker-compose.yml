@@ -1,0 +1,57 @@
+# Toàn bộ phía laptop: broker MQTT + MongoDB + server FastAPI (docs/SERVER.md §8.0)
+#   docker compose up -d --build      chạy (tự chạy lại khi Docker Desktop khởi động)
+#   docker compose logs -f server     xem log
+#   docker compose down               dừng (dữ liệu MongoDB vẫn giữ trong volume mongo-data)
+# Cần trước: server/.env (từ .env.example) và server/mosquitto/passwd (mosquitto_passwd).
+# cloudflared (service Windows) vẫn trỏ http://127.0.0.1:8000 như cũ.
+name: irrigation
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    ports:
+      - "${MQTT_PUBLISH:-1883}:1883"   # gateway nối vào qua hotspot: không chạy kèm Mosquitto trên Windows
+    volumes:
+      - ./server/mosquitto/mosquitto.docker.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./server/mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./server/mosquitto/acl:/mosquitto/config/acl:ro
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "127.0.0.1:${MONGO_PUBLISH:-27017}:27017"  # chỉ trong máy: Compass / notebook ml đọc dữ liệu
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file: server/.env           # MQTT_PASS, DASH_USER, DASH_PASS, ...
+    environment:                    # ghi đè giá trị dành cho chạy ngoài Docker
+      MQTT_HOST: mosquitto
+      MQTT_PORT: "1883"
+      MONGO_URI: mongodb://mongo:27017
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8000"
+    ports:
+      - "${HTTP_PUBLISH:-8000}:8000"
+    volumes:
+      - ./ml/models:/app/ml/models:ro   # thả model mới vào ml/models rồi restart server, không cần build lại
+      - ./server/logs:/app/server/logs
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

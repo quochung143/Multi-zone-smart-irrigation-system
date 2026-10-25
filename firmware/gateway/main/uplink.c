@@ -1,15 +1,18 @@
-// Gateway: gói từ nút -> JSON, theo dõi online/offline, beacon (docs/DESIGN.md §4.3, §6.1)
+// Gateway: gói từ nút -> JSON qua MQTT, theo dõi online/offline, beacon (docs/DESIGN.md §4.3, SERVER.md §3)
 #include <stdio.h>
 #include <string.h>
 
 #include "app_config.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 #include "esp_now.h"
 #include "esp_task_wdt.h"
 #include "freertos/task.h"
 #include "gw.h"
 
 QueueHandle_t g_ack_queue;
+
+static const char *TAG = "uplink";
 
 typedef struct {
     uint8_t zone;
@@ -56,7 +59,7 @@ static void emit_telemetry(uint8_t zone, const msg_telemetry_t *m, int8_t rssi)
              zone, m->h.seq, m->soil_x10 / 10.0f, m->soil_raw, m->temp_x100 / 100.0f,
              m->hum_x100 / 100.0f, m->pump_on, m->node_mode == MODE_FALLBACK ? "fallback" : "normal",
              m->flags, (unsigned long)m->uptime_s, rssi);
-    serial_out(line);
+    gw_publish(zone, "tel", line, 0, false);
 }
 
 static void emit_pump_event(uint8_t zone, const msg_pump_event_t *m)
@@ -65,7 +68,7 @@ static void emit_pump_event(uint8_t zone, const msg_pump_event_t *m)
     snprintf(line, sizeof(line),
              "{\"t\":\"pump\",\"zone\":%u,\"on\":%u,\"src\":\"%s\",\"cmd_seq\":%u,\"dur\":%u}",
              zone, m->on, pump_source_name(m->source), m->cmd_seq, m->duration_s);
-    serial_out(line);
+    gw_publish(zone, "pump", line, 1, false);
 }
 
 // Gói gửi lại (nút không nhận được ACK lớp MAC) có seq trùng; nút reset thì seq nhảy về 1.
@@ -86,14 +89,14 @@ static void handle_packet(const rx_packet_t *pkt)
     zone_stat_t *st = &stats[pkt->zone - 1];
     if (!msg_validate(pkt->data, pkt->len)) {
         st->bad++;
-        serial_out("# goi sai dinh dang");
+        ESP_LOGW(TAG, "Z%u: goi sai dinh dang", pkt->zone);
         return;
     }
     msg_header_t h;
     memcpy(&h, pkt->data, sizeof(h));
     if (h.zone_id != pkt->zone) {
         st->bad++;
-        serial_out("# zone_id khong khop MAC");
+        ESP_LOGW(TAG, "Z%u: zone_id %u khong khop MAC", pkt->zone, h.zone_id);
         return;
     }
     count_seq(st, h.seq);
@@ -162,7 +165,7 @@ static void emit_stats(void)
         snprintf(line, sizeof(line), "{\"t\":\"stat\",\"zone\":%d,\"rx\":%lu,\"lost\":%lu,\"dup\":%lu,\"bad\":%lu}",
                  i + 1, (unsigned long)st->rx, (unsigned long)st->lost, (unsigned long)st->dup,
                  (unsigned long)st->bad);
-        serial_out(line);
+        gw_publish(i + 1, "stat", line, 0, false);
     }
 }
 
@@ -171,6 +174,7 @@ static void emit_stats(void)
 static void liveness_task(void *arg)
 {
     esp_task_wdt_add(NULL);
+    static const uint8_t unset[6] = {0};
     bool reported_online[NUM_ZONES] = {false};
     bool was_alive = false;
     uint32_t last_beacon_ms = 0;
@@ -183,14 +187,15 @@ static void liveness_task(void *arg)
 
         for (int i = 0; i < NUM_ZONES; i++) {
             bool online = seen[i] && (now - last_seen_ms[i] < NODE_OFFLINE_MS);
-            // Server vừa kết nối lại: lúc im lặng không in được "node", báo lại trạng thái hiện tại
-            if (alive && !was_alive && seen[i]) reported_online[i] = !online;
+            // Server vừa sống lại: báo lại trạng thái mọi zone đã cấu hình (retain), kể cả zone chưa thấy,
+            // để xoá node=online còn retain trên broker từ phiên trước
+            if (alive && !was_alive && memcmp(NODE_MAC[i], unset, 6) != 0) reported_online[i] = !online;
             if (online != reported_online[i]) {
                 reported_online[i] = online;
                 char line[48];
                 snprintf(line, sizeof(line), "{\"t\":\"node\",\"zone\":%d,\"online\":%s}", i + 1,
                          online ? "true" : "false");
-                serial_out(line);
+                gw_publish(i + 1, "node", line, 1, true);
             }
         }
 

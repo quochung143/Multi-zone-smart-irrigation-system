@@ -1,10 +1,15 @@
 fastapi
 uvicorn[standard]
-motor
-pyserial
+pydantic-settings
+python-multipart  # form đăng nhập
+aiomqtt>=2.3
+pymongo>=4.13
+pyserial          # chỉ cho tools/gw_bridge.py khi nối gateway firmware Serial cũ
 python-dotenv
 pandas
 numpy
 scikit-learn
 xgboost
 joblib
+pytest
+httpx

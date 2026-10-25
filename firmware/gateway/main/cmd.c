@@ -1,17 +1,19 @@
-// Gateway: JSON từ server -> lệnh ESP-NOW có ACK/retry (docs/DESIGN.md §4.3, §6.2)
+// Gateway: lệnh JSON từ server (MQTT irr/z/{zone}/cmd) -> ESP-NOW có ACK/retry; heartbeat server
+// (docs/DESIGN.md §4.3, docs/SERVER.md §3)
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "app_config.h"
 #include "cJSON.h"
-#include "driver/uart.h"
+#include "esp_log.h"
 #include "esp_task_wdt.h"
 #include "freertos/task.h"
 #include "gw.h"
 
-#define SERVER_UART UART_NUM_0
-#define SERIAL_LINE_MAX    256
+#define JSON_MAX 256
+
+static const char *TAG = "cmd";
 
 typedef struct {
     uint8_t  zone;
@@ -22,14 +24,15 @@ typedef struct {
 
 static QueueHandle_t cmd_queue;
 
-static volatile bool server_seen = false;
+static volatile bool srv_online = false;   // irr/srv/status
+static volatile bool server_seen = false;  // đã nhận ít nhất 1 time
 static volatile uint32_t last_server_ms = 0;
 static volatile uint32_t epoch_base = 0;
 static volatile uint32_t epoch_base_ms = 0;
 
 bool server_alive(void)
 {
-    return server_seen && now_ms() - last_server_ms < SERVER_TIMEOUT_MS;
+    return net_mqtt_connected() && srv_online && server_seen && now_ms() - last_server_ms < SERVER_TIMEOUT_MS;
 }
 
 uint32_t server_epoch_now(void)
@@ -56,7 +59,7 @@ static void emit_ack(uint8_t zone, uint16_t seq, const char *status)
 {
     char line[80];
     snprintf(line, sizeof(line), "{\"t\":\"ack\",\"zone\":%u,\"seq\":%u,\"status\":\"%s\"}", zone, seq, status);
-    serial_out(line);
+    gw_publish(zone, "ack", line, 1, false);
 
     last_ack_t a = {.valid = true, .zone = zone, .seq = seq, .at_ms = now_ms()};
     strlcpy(a.status, status, sizeof(a.status));
@@ -121,53 +124,45 @@ static bool build_command(const cJSON *doc, const char *t, out_cmd_t *out)
     return true;
 }
 
-static void handle_line(const char *line)
+void cmd_on_server_status(bool online)
 {
-    if (line[0] != '{') return;  // bỏ dòng trống / không phải JSON
+    srv_online = online;
+}
 
-    cJSON *doc = cJSON_Parse(line);
-    if (!doc) {
-        serial_out_always("# json loi");  // dòng lỗi không làm mới heartbeat nhưng vẫn phải báo lại
-        return;
-    }
+void cmd_on_time(uint32_t epoch)
+{
     last_server_ms = now_ms();
     server_seen = true;
+    if (epoch > 0) {
+        epoch_base = epoch;
+        epoch_base_ms = now_ms();
+    }
+}
 
+// Gọi từ task MQTT: irr/srv/time ({"t":"time","epoch":...}) hoặc irr/z/{zone}/cmd (cmd | stop | cfg)
+void cmd_handle_json(const char *json, int len)
+{
+    char buf[JSON_MAX];
+    if (len <= 0 || len >= (int)sizeof(buf)) return;
+    memcpy(buf, json, len);
+    buf[len] = '\0';
+
+    cJSON *doc = cJSON_Parse(buf);
+    if (!doc) {
+        ESP_LOGW(TAG, "JSON loi: %s", buf);
+        return;
+    }
     const cJSON *jt = cJSON_GetObjectItemCaseSensitive(doc, "t");
     const char *t = cJSON_IsString(jt) ? jt->valuestring : "";
     if (strcmp(t, "time") == 0) {
         double epoch = json_num(doc, "epoch", 0);
-        if (epoch > 0) {
-            epoch_base = (uint32_t)epoch;
-            epoch_base_ms = now_ms();
-        }
+        cmd_on_time(epoch > 0 ? (uint32_t)epoch : 0);
     } else if (strcmp(t, "ping") != 0) {
         out_cmd_t cmd;
-        if (!build_command(doc, t, &cmd)) serial_out("# lenh khong hop le");
+        if (!build_command(doc, t, &cmd)) ESP_LOGW(TAG, "Lenh khong hop le: %s", buf);
         else if (xQueueSend(cmd_queue, &cmd, 0) != pdTRUE) emit_ack(cmd.zone, cmd.seq, "busy");
     }
     cJSON_Delete(doc);
-}
-
-static void serial_rx_task(void *arg)
-{
-    static char line[SERIAL_LINE_MAX];
-    size_t len = 0;
-    uint8_t buf[64];
-    for (;;) {
-        int n = uart_read_bytes(SERVER_UART, buf, sizeof(buf), pdMS_TO_TICKS(20));
-        for (int i = 0; i < n; i++) {
-            char c = (char)buf[i];
-            if (c == '\r') continue;
-            if (c == '\n') {
-                line[len] = '\0';
-                handle_line(line);
-                len = 0;
-            } else if (len < SERIAL_LINE_MAX - 1) {
-                line[len++] = c;
-            }
-        }
-    }
 }
 
 // Gửi lệnh, chờ ACK đúng seq trong CMD_ACK_TIMEOUT_MS, thử tối đa CMD_RETRY_MAX lần.
@@ -208,6 +203,5 @@ void cmd_init(void)
 
 void cmd_start_tasks(void)
 {
-    xTaskCreatePinnedToCore(serial_rx_task, "serial_rx", 4096, NULL, 3, NULL, 1);
     xTaskCreatePinnedToCore(cmd_task, "cmd", 3072, NULL, 4, NULL, 1);
 }

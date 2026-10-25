@@ -20,3 +20,8 @@ ml/models/*.joblib
 .DS_Store
 Thumbs.db
 ~$*.docx
+
+# Server runtime
+server/logs/
+server/mosquitto/passwd
+.archify/*/review-*/

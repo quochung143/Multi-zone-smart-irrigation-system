@@ -6,7 +6,10 @@
 // Cấu hình chung node/gateway (docs/DESIGN.md §4.1)
 
 // ===== ESP-NOW =====
+// Kênh khi gateway chưa nối Wi-Fi. Đã nối hotspot thì ESP-NOW chạy theo kênh của hotspot,
+// nút tự dò kênh (SCAN_*) và nhớ kênh tìm được trong NVS.
 #define ESPNOW_CHANNEL        1
+#define CHANNEL_MAX           13
 #define NUM_ZONES             3
 
 // TODO: điền MAC thật sau khi đọc từ từng ESP32 (lệnh `mac` trên nút, dòng `hello` của gateway)
@@ -55,10 +58,19 @@ static const uint8_t NODE_MAC[NUM_ZONES][6] = {
 #define STAT_MAX_GAP          100     // khoảng nhảy seq lớn hơn = nút đã reset, không tính mất gói
 #define FALLBACK_TIMEOUT_MS   300000  // node: 5 phút không nghe gateway
 #define SERVER_TIMEOUT_MS     180000  // gateway: không nghe server 3 phút thì ngừng beacon
+#define WIFI_RETRY_MS         5000    // gateway: thử nối lại hotspot
+#define MQTT_KEEPALIVE_S      15
+#define MQTT_RETRY_MS         5000
+#define MQTT_RESOLVE_FAILS    3       // nối broker lỗi liên tiếp bấy nhiêu lần thì phân giải lại tên laptop
+#define MDNS_TIMEOUT_MS       3000
+#define MQTT_DEFAULT_PORT     1883
 #define CMD_RETRY_MAX         3
 #define CMD_ACK_TIMEOUT_MS    300
 #define TX_RETRY_MAX          2       // node: gửi lại khi lỗi lớp MAC
 #define TX_WAIT_MS            100     // node: chờ callback gửi
+#define SCAN_AFTER_FAILS      2       // node: số lần gửi lỗi liên tiếp (đã gồm gửi lại) thì dò kênh
+#define SCAN_ROUNDS           2       // node: số vòng thử kênh 1..CHANNEL_MAX mỗi lần dò
+#define SCAN_RETRY_MS         60000   // node: dò không thấy gateway thì đợi bấy nhiêu mới dò lại
 
 // ===== Cảm biến (node) =====
 #define SOIL_OVERSAMPLE       16      // số lần đọc ADC lấy trung bình mỗi mẫu

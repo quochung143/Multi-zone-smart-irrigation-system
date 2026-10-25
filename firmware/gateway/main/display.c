@@ -1,8 +1,9 @@
 // Gateway: màn hình TFT 320x240 hiển thị trạng thái 3 zone, server và lệnh gần nhất
 //
 //  ┌──────────────────────────────────────┐
-//  │ IRRIGATION GW               SERVER OK │  thanh tiêu đề
-//  │ 12:43:08 22/10/2026        up 01:23:45│
+//  │ IRRIGATION GW                 MQTT OK │  thanh tiêu đề: trạng thái broker
+//  │                             SERVER OK │                 và server
+//  │ 12:43:08 MyHotspot 192.168.43.12 c6   │  giờ, hotspot, IP gateway, kênh Wi-Fi/ESP-NOW
 //  ├──────────────────────────────────────┤
 //  │ Z1 ONLINE           -49dBm   12s      │  3 khối zone, mỗi khối 3 dòng
 //  │ Dat 43.2%  T 28.4C  H 71.2%           │
@@ -29,6 +30,7 @@
 #define FONT_ROW     16
 #define CHAR_W       8
 #define MAX_SEGS     32
+#define SEG_LINK     (4 + NUM_ZONES * 8)  // sau ô footer
 
 static const char *TAG = "display";
 
@@ -69,8 +71,12 @@ static void draw_static(void)
 
 static void draw_header(void)
 {
+    net_status_t n;
+    net_get_status(&n);
     bool alive = server_alive();
-    seg(0, 29, 8, alive ? "SERVER OK" : "SERVER --", alive ? COLOR_GREEN : COLOR_RED, COLOR_BLUE, 1, 10);
+    const char *link = n.mqtt ? "MQTT OK" : n.wifi ? "MQTT --" : "WIFI --";
+    seg(SEG_LINK, 30, 0, link, n.mqtt ? COLOR_GREEN : COLOR_RED, COLOR_BLUE, 1, 10);
+    seg(0, 30, 16, alive ? "SERVER OK" : "SERVER --", alive ? COLOR_GREEN : COLOR_RED, COLOR_BLUE, 1, 10);
 
     char line[64];
     uint32_t epoch = server_epoch_now();
@@ -78,17 +84,23 @@ static void draw_header(void)
         time_t t = (time_t)epoch + TZ_OFFSET_S;
         struct tm tm;
         gmtime_r(&t, &tm);
-        snprintf(line, sizeof(line), "%02d:%02d:%02d %02d/%02d/%04d", tm.tm_hour, tm.tm_min, tm.tm_sec,
-                 tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900);
+        snprintf(line, sizeof(line), "%02d:%02d:%02d", tm.tm_hour, tm.tm_min, tm.tm_sec);
     } else {
-        snprintf(line, sizeof(line), "chua dong bo gio");
+        snprintf(line, sizeof(line), "--:--:--");
     }
-    seg(1, 0, 36, line, COLOR_WHITE, COLOR_BLACK, 1, 24);
+    seg(1, 0, 36, line, COLOR_WHITE, COLOR_BLACK, 1, 9);
 
-    uint32_t up = now_ms() / 1000;
-    snprintf(line, sizeof(line), "up %02lu:%02lu:%02lu", (unsigned long)(up / 3600),
-             (unsigned long)(up / 60 % 60), (unsigned long)(up % 60));
-    seg(2, 26, 36, line, COLOR_GREY, COLOR_BLACK, 1, 14);
+    uint16_t color = COLOR_GREY;
+    if (!n.ssid[0]) {
+        snprintf(line, sizeof(line), "WiFi chua cau hinh (console)");
+        color = COLOR_ORANGE;
+    } else if (n.wifi) {
+        snprintf(line, sizeof(line), "%.10s %s c%u", n.ssid, n.ip, n.channel);
+    } else {
+        snprintf(line, sizeof(line), "Dang noi %.20s...", n.ssid);
+        color = COLOR_YELLOW;
+    }
+    seg(2, 9, 36, line, color, COLOR_BLACK, 1, 31);
 }
 
 static void draw_zone(int zone)
@@ -174,7 +186,7 @@ static void display_task(void *arg)
 void display_start(void)
 {
 #if LCD_ENABLED
-    _Static_assert(3 + NUM_ZONES * 8 < MAX_SEGS, "MAX_SEGS");
+    _Static_assert(SEG_LINK < MAX_SEGS, "MAX_SEGS");
     xTaskCreatePinnedToCore(display_task, "display", 4096, NULL, 1, NULL, 0);
 #endif
 }

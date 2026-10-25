@@ -9,6 +9,8 @@ void comm_start_task(void);
 
 node_mode_t comm_mode(void);
 uint32_t comm_gateway_age_ms(void);  // thời gian kể từ gói cuối nhận từ gateway
+uint8_t comm_channel(void);           // kênh ESP-NOW đang dùng
+void comm_request_scan(void);         // dò lại kênh ngay (console 'scan')
 
 // Đóng gói trạng thái hiện tại thành msg_telemetry_t.
 void comm_build_telemetry(msg_telemetry_t *msg, uint8_t zone, uint16_t seq);

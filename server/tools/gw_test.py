@@ -243,7 +243,8 @@ def main() -> None:
                 elif cmd == "quiet":
                     (quiet.set if parts[1] == "on" else quiet.clear)()
                 else:
-                    print(usage)
+                    # Thường do chữ gõ dở bị dính vào khi dòng tel chen ngang (vd. "wwater")
+                    print(f"!! Khong hieu lenh '{cmd}' (chua gui gi). {usage}")
             except (IndexError, ValueError, KeyError) as e:
                 print(f"Loi cu phap: {e}")
     finally:
