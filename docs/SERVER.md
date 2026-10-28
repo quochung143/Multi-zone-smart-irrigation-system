@@ -334,7 +334,7 @@ Gateway chạy theo kênh của hotspot điện thoại. Kênh này không chọ
 **Đường đi**: trình duyệt → Cloudflare → **Cloudflare Tunnel** `Multi-zone-smart` (service `cloudflared` trên laptop, cấu hình bằng token) → `http://127.0.0.1:8000`.
 
 - Không cần mở cổng router hay có IP tĩnh, nên chạy được trên hotspot 4G.
-- Chỉ đưa **dashboard (cổng 8000)** qua tunnel. **Mosquitto (cổng 1883) không mở ra Internet**: gateway vẫn kết nối qua hotspot.
+- Đưa **dashboard (cổng 8000)** qua tunnel. **Cổng 1883 của Mosquitto không mở ra Internet**. Gateway ở mạng khác dùng MQTT qua WebSocket (`wss://mqtt.quochung.xyz`), xem §14.
 
 **Cấu hình route trên Cloudflare** (Networking → Tunnels → Multi-zone-smart → Routes → `api.quochung.xyz`):
 - Service đặt `HTTP` → `127.0.0.1:8000`.
@@ -351,3 +351,64 @@ Gateway chạy theo kênh của hotspot điện thoại. Kênh này không chọ
 - **Đăng nhập sai** thì server chờ 1 s rồi mới trả lời, để làm chậm việc dò mật khẩu. Tham số `next` chỉ nhận đường dẫn trong site, để tránh open redirect.
 - Dashboard có nút **Đăng xuất** ở góc phải, chỉ hiện khi đăng nhập đang bật.
 - **Hạn chế**: chỉ có một tài khoản dùng chung và không có mã gửi qua email. Phương án mạnh hơn nhưng có thể phải khai báo thẻ là Cloudflare Access (gói Zero Trust Free, ≤ 50 người dùng). Server không cần sửa gì nếu sau này bật thêm Access.
+
+## 14. Gateway ở mạng khác laptop (`wss://mqtt.quochung.xyz`)
+
+**Mục tiêu**: gateway ở mạng A (Wi-Fi tại vườn), laptop chạy server ở mạng B (nhà, hotspot…), người dùng ở bất kỳ đâu điều khiển qua `https://api.quochung.xyz`.
+
+**Đường đi của gateway**: gateway → `wss://mqtt.quochung.xyz:443` (TLS do Cloudflare cấp) → Cloudflare Tunnel `Multi-zone-smart` → `http://127.0.0.1:9001` → Mosquitto (listener WebSocket). Server trong Docker vẫn nối broker nội bộ qua 1883 như cũ.
+
+### 14.1 Quyết định (27/10/2026)
+
+| # | Quyết định |
+|---|---|
+| S21 | Laptop vẫn là server. Laptop tắt hoặc ngủ thì không điều khiển từ xa được; nút tự sang FALLBACK sau 5 phút (§3.2), dữ liệu lúc đó không lưu (giữ S18) |
+| S22 | Gateway nối broker qua **MQTT over WebSocket + TLS** đi qua Cloudflare Tunnel sẵn có. Không mở cổng router, chạy được khi laptop dùng hotspot hoặc bị CGNAT |
+| S23 | Gateway có **một** địa chỉ broker: tên/IP trong LAN (`mqtt://`) **hoặc** URL `wss://`. Không tự chuyển qua lại giữa hai kiểu |
+| S24 | Đã ra Internet thì tài khoản `gateway` dùng **mật khẩu mới, ≥ 20 ký tự ngẫu nhiên**. ACL giữ nguyên (§3.3) |
+| S25 | Cấu hình gateway bằng phần mềm `GatewayConfig.exe` qua USB. Cấu hình Wi-Fi qua BLE (ESP BLE Provisioning, Security 1 + mã PoP hiện trên TFT) **làm sau** |
+
+### 14.2 Cài đặt phía laptop (một lần)
+
+1. **Mosquitto mở WebSocket**: [mosquitto.docker.conf](../server/mosquitto/mosquitto.docker.conf) có thêm `listener 9001` / `protocol websockets`. Compose publish cổng `127.0.0.1:9001`, chỉ trong máy. Áp dụng:
+   ```powershell
+   docker compose up -d mosquitto
+   ```
+2. **Route trên Cloudflare** (Networking → Tunnels → Multi-zone-smart → Routes → *Add*): hostname `mqtt.quochung.xyz`, service `HTTP` → `127.0.0.1:9001`. Không dùng `localhost` (lý do giống §13). Cloudflare tự chuyển tiếp WebSocket, không cần bật thêm gì.
+3. **Đổi mật khẩu gateway** (S24). File `passwd` được mount chỉ đọc nên sửa từ Windows rồi khởi động lại broker:
+   ```powershell
+   & "C:\Program Files\mosquitto\mosquitto_passwd.exe" server\mosquitto\passwd gateway   # nhập mật khẩu mới 2 lần
+   docker compose restart mosquitto
+   ```
+   Nếu đổi mật khẩu thì cập nhật lại mật khẩu này trên gateway (§14.4).
+
+### 14.3 Firmware gateway
+
+- Lệnh `broker` nhận thêm URL đầy đủ: `broker wss://mqtt.quochung.xyz`. Có URL thì gateway bỏ qua mDNS/IP dự phòng, cổng lấy theo URL (wss mặc định 443).
+- `wss://` và `mqtts://` kiểm tra chứng chỉ bằng bộ CA có sẵn của ESP-IDF (`esp_crt_bundle`), **không có tùy chọn bỏ qua xác thực**. `ws://` và `mqtt://` vẫn nhận được, nhưng phần mềm cấu hình chỉ cho chọn `wss://` khi đi qua Internet.
+- Keepalive MQTT 15 s, thấp hơn mức 100 s mà Cloudflare cắt WebSocket im lặng.
+- `sdkconfig.defaults` bật `CONFIG_MQTT_TRANSPORT_SSL/WEBSOCKET/WEBSOCKET_SECURE` và `CONFIG_MBEDTLS_DYNAMIC_BUFFER`. Bản cũ đã có `firmware/gateway/sdkconfig` thì sửa các mục này trong `idf.py menuconfig` (Component config → ESP-MQTT), hoặc xoá `sdkconfig` để tạo lại từ defaults.
+- Lệnh mới cho phần mềm cấu hình, mỗi lệnh in **một dòng** `@<json>`, dựng trong bộ đệm rồi in một lần để log không chen vào:
+  - `net_json`: cấu hình đã lưu. Mật khẩu chỉ báo `has_pass` / `has_mpass`, không bao giờ in ra.
+  - `status_json`: Wi-Fi, IP, kênh, MQTT, server, broker, MAC, 3 zone.
+  - `wifi_scan`: tối đa 20 mạng quanh gateway. Chưa nối Wi-Fi thì trả lại kênh ESP-NOW sau khi quét.
+- Kích thước: 1,07 MB, phân vùng app còn trống 27%. **BLE (S25) sẽ không vừa** phân vùng 1,5 MB hiện tại, khi làm phải chuyển sang bảng phân vùng tùy chỉnh (app khoảng 3 MB, flash 4 MB đủ).
+
+### 14.4 Phần mềm cấu hình `GatewayConfig.exe`
+
+[server/tools/gw_config.py](../server/tools/gw_config.py) (Tkinter + pyserial). Chạy thẳng bằng `python server/tools/gw_config.py`, hoặc đóng gói thành `.exe`:
+```powershell
+powershell -ExecutionPolicy Bypass -File server\tools\build_gw_config.ps1
+# -> server\tools\dist\GatewayConfig.exe (một file, chép sang máy khác chạy luôn)
+```
+
+Cách dùng:
+1. Cắm gateway vào USB, chọn cổng COM, bấm **Kết nối**. Đóng `idf.py monitor` trước nếu đang mở.
+2. Phần mềm tự đọc cấu hình hiện tại. Bấm **Quét** để chọn Wi-Fi từ danh sách.
+3. Broker: chọn **Cùng mạng (LAN)** (tên laptop `.local` hoặc IP, cổng, IP dự phòng) hoặc **Qua Internet** (`wss://mqtt.quochung.xyz`).
+4. Bấm **Lưu và khởi động lại gateway**. Phần mềm chỉ gửi những mục đã thay đổi; ô mật khẩu để trống nghĩa là giữ mật khẩu cũ.
+5. Khung **Trạng thái** tự cập nhật mỗi 3 s: Wi-Fi, MQTT, server, 3 zone.
+
+Ghi chú:
+- Mật khẩu được che (`***`) trong khung console của phần mềm.
+- Windows Defender có thể cảnh báo file `.exe` do PyInstaller tạo. Chọn *More info → Run anyway*.

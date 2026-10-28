@@ -63,7 +63,7 @@ void cmd_last_ack(last_ack_t *out);
 typedef struct {
     char     ssid[33];
     char     pass[65];
-    char     host[64];   // tên máy laptop "<ten>.local" (mDNS) hoặc IP
+    char     host[64];   // "<ten>.local" (mDNS), IP, hoặc URL đầy đủ "wss://mqtt.example.com" (qua Internet)
     char     ip[16];     // IP dự phòng khi mDNS không phân giải được
     uint16_t port;
     char     user[33];
@@ -71,6 +71,7 @@ typedef struct {
 } net_config_t;
 net_config_t net_config_get(void);
 bool net_config_set(const net_config_t *c);  // lưu NVS; có hiệu lực sau khi khởi động lại
+bool net_host_is_url(const char *host);      // "scheme://..." thì nối thẳng URL, không mDNS/IP dự phòng
 
 typedef struct {
     bool    wifi;         // đã có IP
@@ -78,7 +79,7 @@ typedef struct {
     uint8_t channel;      // kênh Wi-Fi hiện tại = kênh ESP-NOW
     char    ssid[33];
     char    ip[16];
-    char    broker[24];   // IP:port broker đang dùng
+    char    broker[64];   // IP:port hoặc URL broker đang dùng
 } net_status_t;
 void net_init(void);      // gọi sau esp_wifi_init
 void net_start(void);

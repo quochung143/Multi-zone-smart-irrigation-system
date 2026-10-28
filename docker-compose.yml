@@ -3,7 +3,7 @@
 #   docker compose logs -f server     xem log
 #   docker compose down               dừng (dữ liệu MongoDB vẫn giữ trong volume mongo-data)
 # Cần trước: server/.env (từ .env.example) và server/mosquitto/passwd (mosquitto_passwd).
-# cloudflared (service Windows) vẫn trỏ http://127.0.0.1:8000 như cũ.
+# cloudflared (service Windows) trỏ http://127.0.0.1:8000 (dashboard) và http://127.0.0.1:9001 (MQTT WebSocket).
 name: irrigation
 
 services:
@@ -11,6 +11,7 @@ services:
     image: eclipse-mosquitto:2.0.22
     ports:
       - "${MQTT_PUBLISH:-1883}:1883"   # gateway nối vào qua hotspot: không chạy kèm Mosquitto trên Windows
+      - "127.0.0.1:${MQTT_WS_PUBLISH:-9001}:9001"  # WebSocket chỉ trong máy: cloudflared -> wss://mqtt.<ten-mien>
     volumes:
       - ./server/mosquitto/mosquitto.docker.conf:/mosquitto/config/mosquitto.conf:ro
       - ./server/mosquitto/passwd:/mosquitto/config/passwd:ro

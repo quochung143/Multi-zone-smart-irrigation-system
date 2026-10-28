@@ -12,6 +12,10 @@ CONFIG_LOG_MAXIMUM_LEVEL_INFO=y
 CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
 # Wi-Fi + MQTT + mDNS + TFT vượt 1 MB: dùng phân vùng app 1.5 MB (không OTA)
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
-# Broker trong LAN, không dùng TLS/WebSocket
-CONFIG_MQTT_TRANSPORT_SSL=n
-CONFIG_MQTT_TRANSPORT_WEBSOCKET=n
+# Broker trong LAN (mqtt://) hoặc qua Internet (wss:// qua Cloudflare Tunnel, docs/SERVER.md §14)
+CONFIG_MQTT_TRANSPORT_SSL=y
+CONFIG_MQTT_TRANSPORT_WEBSOCKET=y
+CONFIG_MQTT_TRANSPORT_WEBSOCKET_SECURE=y
+# Chứng chỉ broker kiểm tra bằng bộ CA có sẵn; bộ đệm TLS cấp phát động để tiết kiệm RAM
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y

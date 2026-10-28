@@ -21,6 +21,10 @@ ml/models/*.joblib
 Thumbs.db
 ~$*.docx
 
+# Phần mềm cấu hình gateway (build_gw_config.ps1)
+server/tools/build/
+server/tools/dist/
+
 # Server runtime
 server/logs/
 server/mosquitto/passwd

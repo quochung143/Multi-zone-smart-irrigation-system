@@ -2,6 +2,8 @@
 //
 // - Đã nối hotspot thì ESP-NOW chạy theo kênh của hotspot (peer khai báo kênh 0 = kênh hiện tại).
 // - Broker: "<ten-laptop>.local" phân giải bằng mDNS, không được thì dùng IP dự phòng.
+//   Hoặc URL đầy đủ (wss://, mqtts://, ws://, mqtt://) để nối qua Internet (docs/SERVER.md §14):
+//   wss/mqtts kiểm tra chứng chỉ bằng bộ CA có sẵn của ESP-IDF, không bao giờ bỏ qua xác thực.
 // - LWT irr/gw/status = offline (retain); nối xong publish online. Lần nối đầu sau khi khởi động
 //   publish offline rồi online để server chắc chắn resync (giống dòng "hello" của bản Serial).
 // - Nối broker lỗi MQTT_RESOLVE_FAILS lần liên tiếp thì phân giải lại (IP laptop đổi theo DHCP hotspot).
@@ -9,6 +11,7 @@
 #include <string.h>
 
 #include "app_config.h"
+#include "esp_crt_bundle.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -81,10 +84,32 @@ net_config_t net_config_get(void)
     return stored;
 }
 
+static const char *const URL_SCHEMES[] = {"wss://", "mqtts://", "ws://", "mqtt://"};
+
+bool net_host_is_url(const char *host)
+{
+    return strstr(host, "://") != NULL;
+}
+
+static bool url_scheme_ok(const char *host)
+{
+    for (size_t i = 0; i < sizeof(URL_SCHEMES) / sizeof(URL_SCHEMES[0]); i++) {
+        size_t n = strlen(URL_SCHEMES[i]);
+        if (strncmp(host, URL_SCHEMES[i], n) == 0 && host[n]) return true;
+    }
+    return false;
+}
+
+static bool url_is_secure(const char *uri)
+{
+    return strncmp(uri, "wss://", 6) == 0 || strncmp(uri, "mqtts://", 8) == 0;
+}
+
 bool net_config_set(const net_config_t *c)
 {
     esp_ip4_addr_t tmp;
     if (c->port == 0 || (c->ip[0] && esp_netif_str_to_ip4(c->ip, &tmp) != ESP_OK)) return false;
+    if (net_host_is_url(c->host) && !url_scheme_ok(c->host)) return false;
     nvs_handle_t h;
     if (nvs_open("net", NVS_READWRITE, &h) != ESP_OK) return false;
     nvs_set_str(h, "ssid", c->ssid);
@@ -169,6 +194,10 @@ static void on_mqtt(void *arg, esp_event_base_t base, int32_t id, void *data)
 static bool resolve_broker(char *out, size_t n)
 {
     esp_ip4_addr_t addr;
+    if (net_host_is_url(cfg.host)) {  // URL: esp-mqtt tự phân giải DNS và chọn transport theo scheme
+        strlcpy(out, cfg.host, n);
+        return true;
+    }
     if (cfg.host[0] && esp_netif_str_to_ip4(cfg.host, &addr) == ESP_OK) {
         strlcpy(out, cfg.host, n);
         return true;
@@ -200,13 +229,17 @@ static void mqtt_restart(const char *addr)
         client = NULL;
     }
     char uri[96];
-    snprintf(uri, sizeof(uri), "mqtt://%s:%u", addr, cfg.port);
+    bool url = net_host_is_url(addr);
+    if (url) strlcpy(uri, addr, sizeof(uri));  // cổng lấy theo URL (wss mặc định 443)
+    else snprintf(uri, sizeof(uri), "mqtt://%s:%u", addr, cfg.port);
     taskENTER_CRITICAL(&mux);
-    snprintf(st.broker, sizeof(st.broker), "%s:%u", addr, cfg.port);
+    if (url) strlcpy(st.broker, addr, sizeof(st.broker));
+    else snprintf(st.broker, sizeof(st.broker), "%s:%u", addr, cfg.port);
     taskEXIT_CRITICAL(&mux);
 
     esp_mqtt_client_config_t mc = {
         .broker.address.uri = uri,
+        .broker.verification.crt_bundle_attach = url_is_secure(uri) ? esp_crt_bundle_attach : NULL,
         .credentials.client_id = "irr-gateway",
         .credentials.username = cfg.user[0] ? cfg.user : NULL,
         .credentials.authentication.password = cfg.mpass[0] ? cfg.mpass : NULL,
