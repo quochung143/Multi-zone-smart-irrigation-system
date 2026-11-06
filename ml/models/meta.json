@@ -1,0 +1,205 @@
+{
+  "version": "v1",
+  "clf": "clf_v1.joblib",
+  "reg": null,
+  "model": "xgb",
+  "features": [
+    "soil",
+    "temp",
+    "hum",
+    "dsoil_30m",
+    "dsoil_60m",
+    "dtemp_60m",
+    "hour_sin",
+    "hour_cos",
+    "mins_since_last_water",
+    "last_water_dur",
+    "waters_last_24h",
+    "zone_1",
+    "zone_2",
+    "zone_3"
+  ],
+  "dur_features": [
+    "soil_before",
+    "delta_target",
+    "temp",
+    "hum",
+    "zone_1",
+    "zone_2",
+    "zone_3"
+  ],
+  "trained_at": "2026-11-05T07:40:43+07:00",
+  "source": {
+    "name": "mendeley:jtsyb593fy",
+    "file": "mendeley_jtsyb593fy.xlsx",
+    "rows": 872,
+    "soil_low": 35.0,
+    "soil_shift": 25.0,
+    "label": "soil<soil_low trong 2h (use_events=False)"
+  },
+  "split": {
+    "train": 610,
+    "val": 131,
+    "test": 131
+  },
+  "metrics": {
+    "rf": {
+      "params": {
+        "n_estimators": 200,
+        "max_depth": null,
+        "min_samples_leaf": 3
+      },
+      "val": {
+        "n": 131,
+        "pos": 20,
+        "accuracy": 0.9542,
+        "precision": 1.0,
+        "recall": 0.7,
+        "f1": 0.8235,
+        "confusion": {
+          "tn": 111,
+          "fp": 0,
+          "fn": 6,
+          "tp": 14
+        },
+        "early_recall": 0.4545,
+        "early_pos": 11
+      },
+      "test": {
+        "n": 131,
+        "pos": 67,
+        "accuracy": 0.9466,
+        "precision": 0.9688,
+        "recall": 0.9254,
+        "f1": 0.9466,
+        "confusion": {
+          "tn": 62,
+          "fp": 2,
+          "fn": 5,
+          "tp": 62
+        },
+        "early_recall": 0.6429,
+        "early_pos": 14
+      }
+    },
+    "xgb": {
+      "params": {
+        "n_estimators": 100,
+        "max_depth": 3,
+        "learning_rate": 0.1
+      },
+      "val": {
+        "n": 131,
+        "pos": 20,
+        "accuracy": 0.9618,
+        "precision": 0.9412,
+        "recall": 0.8,
+        "f1": 0.8649,
+        "confusion": {
+          "tn": 110,
+          "fp": 1,
+          "fn": 4,
+          "tp": 16
+        },
+        "early_recall": 0.6364,
+        "early_pos": 11
+      },
+      "test": {
+        "n": 131,
+        "pos": 67,
+        "accuracy": 0.9542,
+        "precision": 0.9841,
+        "recall": 0.9254,
+        "f1": 0.9538,
+        "confusion": {
+          "tn": 63,
+          "fp": 1,
+          "fn": 5,
+          "tp": 62
+        },
+        "early_recall": 0.6429,
+        "early_pos": 14
+      }
+    },
+    "mlp": {
+      "params": {
+        "hidden_layer_sizes": [
+          32,
+          16
+        ],
+        "alpha": 0.001
+      },
+      "val": {
+        "n": 131,
+        "pos": 20,
+        "accuracy": 0.9313,
+        "precision": 0.8667,
+        "recall": 0.65,
+        "f1": 0.7429,
+        "confusion": {
+          "tn": 109,
+          "fp": 2,
+          "fn": 7,
+          "tp": 13
+        },
+        "early_recall": 0.3636,
+        "early_pos": 11
+      },
+      "test": {
+        "n": 131,
+        "pos": 67,
+        "accuracy": 0.916,
+        "precision": 0.9375,
+        "recall": 0.8955,
+        "f1": 0.916,
+        "confusion": {
+          "tn": 60,
+          "fp": 4,
+          "fn": 7,
+          "tp": 60
+        },
+        "early_recall": 0.6429,
+        "early_pos": 14
+      }
+    }
+  },
+  "baseline": {
+    "val": {
+      "n": 131,
+      "pos": 20,
+      "accuracy": 0.9084,
+      "precision": 0.9,
+      "recall": 0.45,
+      "f1": 0.6,
+      "confusion": {
+        "tn": 110,
+        "fp": 1,
+        "fn": 11,
+        "tp": 9
+      },
+      "early_recall": 0.0,
+      "early_pos": 11
+    },
+    "test": {
+      "n": 131,
+      "pos": 67,
+      "accuracy": 0.8779,
+      "precision": 0.9636,
+      "recall": 0.791,
+      "f1": 0.8689,
+      "confusion": {
+        "tn": 62,
+        "fp": 2,
+        "fn": 14,
+        "tp": 53
+      },
+      "early_recall": 0.0,
+      "early_pos": 14
+    }
+  },
+  "env": {
+    "python": "3.13.5",
+    "sklearn": "1.6.1",
+    "xgboost": "3.4.1"
+  }
+}

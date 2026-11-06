@@ -12,12 +12,13 @@
 #define CHANNEL_MAX           13
 #define NUM_ZONES             3
 
-// TODO: điền MAC thật sau khi đọc từ từng ESP32 (lệnh `mac` trên nút, dòng `hello` của gateway)
+// MAC Wi-Fi STA thật của từng board (đọc bằng lệnh `mac` trên console, hoặc `esptool.py -p COMx read_mac`).
+// Đổi board thì sửa ở đây rồi build + nạp lại CẢ 4 board.
 static const uint8_t GATEWAY_MAC[6]         = {0x70, 0x4B, 0xCA, 0x6E, 0xBC, 0x68};
 static const uint8_t NODE_MAC[NUM_ZONES][6] = {
     {0x8C, 0x94, 0xDF, 0x4B, 0xEE, 0x00},  // Zone 1
-    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},  // Zone 2
-    {0x00, 0x00, 0x00, 0x00, 0x00, 0x00},  // Zone 3
+    {0x8C, 0x94, 0xDF, 0x4C, 0x01, 0x84},  // Zone 2
+    {0x8C, 0x94, 0xDF, 0x46, 0xC3, 0x9C},  // Zone 3
 };
 
 // ===== Chân (node) =====

@@ -8,7 +8,7 @@ rồi mới gọi build_features() / build_duration_features().
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
@@ -40,6 +40,34 @@ def events_from_records(records: list[dict]) -> pd.DataFrame:
     if not df.empty:
         df["start_ts"] = pd.to_datetime(df["start_ts"], utc=True)
     return df.sort_values("start_ts").reset_index(drop=True)
+
+
+# --- Adapter dataset công khai -------------------------------------------------------------
+# Mendeley jtsyb593fy (Edge IoT Predictive Irrigation, CC BY 4.0): 960 mẫu, 30 phút/mẫu, 20 ngày, 1 khay.
+# Bơm trong dataset chạy theo LỊCH 06:00/18:00 và ngày tưới gần như không phụ thuộc độ ẩm, nên nhãn
+# chỉ lấy theo độ ẩm (label.py, use_events=False). Thang độ ẩm khác cảm biến của ta: dời toàn bộ để
+# ngưỡng của dataset (MENDELEY_SOIL_LOW) trùng soil_low mặc định của server (độ dốc giữ nguyên).
+LOCAL_TZ = timezone(timedelta(hours=7))
+MENDELEY_SOIL_LOW = 60.0   # ~27% thời gian dưới mức này
+PUBLIC_SOIL_LOW = 35.0     # = ZoneConfig.soil_low mặc định
+PUBLIC_DUR_S = 15.0        # dataset không có thời lượng bơm theo giây: dùng giữa khoảng 5–25 s
+
+
+def from_mendeley_jtsyb593fy(path, soil_low: float = PUBLIC_SOIL_LOW) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Adapter Mendeley jtsyb593fy (.xlsx) -> (readings, events) chuẩn, độ ẩm đã dời về thang soil_low."""
+    raw = pd.read_excel(path).sort_values("Timestamp").reset_index(drop=True)
+    ts = pd.to_datetime(raw["Timestamp"]).dt.tz_localize(LOCAL_TZ).dt.tz_convert("UTC")
+    readings = pd.DataFrame({
+        "ts": ts,
+        "soil": raw["Soil_Moisture_pct"].astype(float) - (MENDELEY_SOIL_LOW - soil_low),
+        "temp": raw["Temperature_C"].astype(float),
+        "hum": raw["Humidity_pct"].astype(float),
+    })
+    pump = raw["Pump_Status"].astype(int)
+    starts = (pump == 1) & (pump.shift(fill_value=0) == 0)
+    events = pd.DataFrame({"start_ts": ts[starts].values, "duration_s": PUBLIC_DUR_S})
+    events["start_ts"] = pd.to_datetime(events["start_ts"], utc=True)
+    return readings, events.reset_index(drop=True)
 
 
 def _window_mean(df: pd.DataFrame, col: str, end: pd.Timestamp) -> float:
